@@ -2,6 +2,10 @@
 
 **NAT-aware multipath traceroute tool for Windows**
 
+## Attribution
+
+This project is a native Windows port based on the original [dublin-traceroute](https://github.com/insomniacslk/dublin-traceroute) by [insomniacslk](https://github.com/insomniacslk).
+
 Dublin Traceroute is a sophisticated network diagnostic tool that can trace multiple paths through a network, detect NAT traversal, and visualize complex network topologies. This is a native Windows port of the original dublin-traceroute project.
 
 ## Features

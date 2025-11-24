@@ -1,5 +1,10 @@
 /* SPDX-License-Identifier: BSD-2-Clause */
 
+//
+// This file is based on code from the original dublin-traceroute project:
+//   https://github.com/insomniacslk/dublin-traceroute
+// Copyright (c) insomniacslk (https://github.com/insomniacslk)
+
 package results
 
 import (
