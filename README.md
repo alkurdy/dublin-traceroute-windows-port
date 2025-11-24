@@ -6,6 +6,10 @@
 
 This project is a native Windows port based on the original [dublin-traceroute](https://github.com/insomniacslk/dublin-traceroute) by [insomniacslk](https://github.com/insomniacslk).
 
+Dublin Traceroute for Windows pre-built binary:
+
+**[Download dublin-traceroute.exe](https://github.com/alkurdy/dublin-traceroute-windows-port/releases/download/v1.0.0-windows/dublin-traceroute.exe)**
+
 Dublin Traceroute is a sophisticated network diagnostic tool that can trace multiple paths through a network, detect NAT traversal, and visualize complex network topologies. This is a native Windows port of the original dublin-traceroute project.
 
 ## Features
