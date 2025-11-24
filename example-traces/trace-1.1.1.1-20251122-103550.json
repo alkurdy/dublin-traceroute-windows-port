@@ -1,0 +1,192 @@
+{
+  "target": "1.1.1.1",
+  "src_ip": "10.4.0.131",
+  "start_time": "2025-11-22T10:35:50.8579861-05:00",
+  "end_time": "2025-11-22T10:36:13.5914814-05:00",
+  "duration": 22733202000,
+  "hops": {
+    "1": {
+      "ttl": 1,
+      "flows": {
+        "0": {
+          "flow_id": 0,
+          "src_port": 33434,
+          "dst_port": 33434,
+          "sent_time": "2025-11-22T10:35:50.8579861-05:00",
+          "recv_time": "2025-11-22T10:35:51.1951755-05:00",
+          "rtt": 337185000,
+          "response_ip": "10.4.0.129",
+          "hostname": "gw-1629.net.vdi.abb.msad.",
+          "icmp_type": 11
+        },
+        "1": {
+          "flow_id": 1,
+          "src_port": 33435,
+          "dst_port": 33434,
+          "sent_time": "2025-11-22T10:35:51.2085913-05:00",
+          "recv_time": "2025-11-22T10:35:51.6709627-05:00",
+          "rtt": 462365400,
+          "response_ip": "10.4.0.129",
+          "hostname": "gw-1629.net.vdi.abb.msad.",
+          "icmp_type": 11
+        }
+      }
+    },
+    "2": {
+      "ttl": 2,
+      "flows": {
+        "0": {
+          "flow_id": 0,
+          "src_port": 33434,
+          "dst_port": 33434,
+          "sent_time": "2025-11-22T10:35:51.6815681-05:00",
+          "recv_time": "0001-01-01T00:00:00Z",
+          "rtt": 0,
+          "response_ip": "",
+          "error": "timeout"
+        },
+        "1": {
+          "flow_id": 1,
+          "src_port": 33435,
+          "dst_port": 33434,
+          "sent_time": "2025-11-22T10:35:54.6820011-05:00",
+          "recv_time": "2025-11-22T10:35:54.7066176-05:00",
+          "rtt": 24616100,
+          "response_ip": "65.175.128.71",
+          "hostname": "TBD-65-175-128-71.metrocast.net.128.175.65.in-addr.arpa.",
+          "icmp_type": 11
+        }
+      }
+    },
+    "3": {
+      "ttl": 3,
+      "flows": {
+        "0": {
+          "flow_id": 0,
+          "src_port": 33434,
+          "dst_port": 33434,
+          "sent_time": "2025-11-22T10:35:54.7177407-05:00",
+          "recv_time": "0001-01-01T00:00:00Z",
+          "rtt": 0,
+          "response_ip": "",
+          "error": "timeout"
+        },
+        "1": {
+          "flow_id": 1,
+          "src_port": 33435,
+          "dst_port": 33434,
+          "sent_time": "2025-11-22T10:35:57.7189891-05:00",
+          "recv_time": "2025-11-22T10:35:57.7223815-05:00",
+          "rtt": 3392300,
+          "response_ip": "209.196.168.150",
+          "hostname": "static-209-196-168-150.nh.cpe.atlanticbb.net.",
+          "icmp_type": 11
+        }
+      }
+    },
+    "4": {
+      "ttl": 4,
+      "flows": {
+        "0": {
+          "flow_id": 0,
+          "src_port": 33434,
+          "dst_port": 33434,
+          "sent_time": "2025-11-22T10:35:57.7335596-05:00",
+          "recv_time": "2025-11-22T10:35:57.7382472-05:00",
+          "rtt": 4687500,
+          "response_ip": "209.196.169.68",
+          "hostname": "static-209-196-169-68.nh.cpe.atlanticbb.net.",
+          "icmp_type": 11
+        },
+        "1": {
+          "flow_id": 1,
+          "src_port": 33435,
+          "dst_port": 33434,
+          "sent_time": "2025-11-22T10:35:57.7493496-05:00",
+          "recv_time": "0001-01-01T00:00:00Z",
+          "rtt": 0,
+          "response_ip": "",
+          "error": "timeout"
+        }
+      }
+    },
+    "5": {
+      "ttl": 5,
+      "flows": {
+        "0": {
+          "flow_id": 0,
+          "src_port": 33434,
+          "dst_port": 33434,
+          "sent_time": "2025-11-22T10:36:00.7495994-05:00",
+          "recv_time": "2025-11-22T10:36:01.2256246-05:00",
+          "rtt": 476019000,
+          "response_ip": "209.196.169.93",
+          "hostname": "static-209-196-169-93.nh.cpe.atlanticbb.net.",
+          "icmp_type": 11
+        },
+        "1": {
+          "flow_id": 1,
+          "src_port": 33435,
+          "dst_port": 33434,
+          "sent_time": "2025-11-22T10:36:01.2369161-05:00",
+          "recv_time": "0001-01-01T00:00:00Z",
+          "rtt": 0,
+          "response_ip": "",
+          "error": "timeout"
+        }
+      }
+    },
+    "6": {
+      "ttl": 6,
+      "flows": {
+        "0": {
+          "flow_id": 0,
+          "src_port": 33434,
+          "dst_port": 33434,
+          "sent_time": "2025-11-22T10:36:04.256754-05:00",
+          "recv_time": "0001-01-01T00:00:00Z",
+          "rtt": 0,
+          "response_ip": "",
+          "error": "timeout"
+        },
+        "1": {
+          "flow_id": 1,
+          "src_port": 33435,
+          "dst_port": 33434,
+          "sent_time": "2025-11-22T10:36:07.2572409-05:00",
+          "recv_time": "0001-01-01T00:00:00Z",
+          "rtt": 0,
+          "response_ip": "",
+          "error": "timeout"
+        }
+      }
+    },
+    "7": {
+      "ttl": 7,
+      "flows": {
+        "0": {
+          "flow_id": 0,
+          "src_port": 33434,
+          "dst_port": 33434,
+          "sent_time": "2025-11-22T10:36:10.258613-05:00",
+          "recv_time": "2025-11-22T10:36:10.5796968-05:00",
+          "rtt": 321079700,
+          "response_ip": "1.1.1.1",
+          "hostname": "one.one.one.one.",
+          "icmp_type": 3,
+          "icmp_code": 3
+        },
+        "1": {
+          "flow_id": 1,
+          "src_port": 33435,
+          "dst_port": 33434,
+          "sent_time": "2025-11-22T10:36:10.5907637-05:00",
+          "recv_time": "0001-01-01T00:00:00Z",
+          "rtt": 0,
+          "response_ip": "",
+          "error": "timeout"
+        }
+      }
+    }
+  }
+}
