@@ -41,13 +41,13 @@ var (
 	
 	// Path parameters
 	numPaths = flag.Uint("npaths", 4, "Number of paths to probe (parallel flows)")
-	probeCount = flag.Uint("count", 1, "Number of probes per hop for MTR-style statistics (1-10, default: 1)")
+	probeCount = flag.Uint("count", 1, "Number of probes per hop for MTR-style statistics (1-10)")
 	timeout = flag.Uint("timeout", 0, "Probe timeout in milliseconds (default: UDP=3000ms, TCP=1000ms)")
 	
 	// Output parameters
 	outputJSON = flag.String("output-json", "", "Save results to JSON file")
 	showVersion = flag.Bool("version", false, "Show version information")
-	showAnalysis = flag.Bool("analyze", true, "Show detailed network analysis (default: true)")
+	showAnalysis = flag.Bool("analyze", true, "Show detailed network analysis")
 	showHelp = flag.Bool("help-routing", false, "Explain return path routing and asymmetric paths")
 	showTips = flag.Bool("tips", false, "Show tips for comparing routes over time")
 	verbose = flag.Bool("verbose", false, "Show verbose output including timeouts")
