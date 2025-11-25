@@ -225,105 +225,14 @@ dublin-traceroute -target critical-service.com -output-json "C:\Logs\trace-$(Get
 
 ---
 
-## Troubleshooting Scenarios
 
-### 9. Diagnose Slow Connection
-```powershell
-# Step 1: Baseline when working
-dublin-traceroute -target slow-server.com -output-json working.json
+## Troubleshooting & Advanced Scenarios
 
-# Step 2: During slowness
-dublin-traceroute -target slow-server.com -output-json slow.json
+For troubleshooting, output interpretation, and advanced analysis, see:
+- [MTR_QUICK_REFERENCE.md](MTR_QUICK_REFERENCE.md)
+- [docs/MTR_MODE.md](docs/MTR_MODE.md)
 
-# Step 3: Compare the files manually or look for latency spikes
-```
-**What to look for:**
-- Different router IPs (route changed)
-- Higher RTT values at specific hop
-- New high-latency hop in path
-
----
-
-### 10. Test Internal Network
-```powershell
-dublin-traceroute -target 10.5.100.50 -max-ttl 10
-```
-**What it does:** Traces path to internal server.
-
-**Use case:** 
-- Verify VLAN routing
-- Check if traffic goes through expected switches/routers
-- Diagnose internal routing issues
-
----
-
-### 11. Test Different Ports
-```powershell
-# TCP trace to common ports (better success rate)
-dublin-traceroute -target example.com -tcp -dport 443  # HTTPS
-dublin-traceroute -target example.com -tcp -dport 80   # HTTP
-dublin-traceroute -target example.com -tcp -dport 22   # SSH
-
-# UDP trace (original method)
-dublin-traceroute -target example.com -dport 53   # DNS
-```
-**What it does:** Tests both TCP and UDP with different destination ports.
-
-**Use case:** 
-- TCP traces often work better through firewalls
-- Some networks treat TCP/UDP traffic differently
-- Port-based QoS or routing policies
-- Compare UDP vs TCP path differences
-
-**💡 Pro Tip:** If UDP traceroute has high packet loss, try `-tcp -dport 443` for better results.
-
----
-
-### 12. Skip Local Hops
-```powershell
-dublin-traceroute -target remote-server.com -min-ttl 5 -max-ttl 20
-```
-**What it does:** Starts trace at hop 5, skips local network hops 1-4.
-
-**Use case:** Focus on ISP/backbone routing, ignore local infrastructure you already know.
-
----
-
-## Learning & Understanding
-
-### 13. Understand Return Path Routing
-```powershell
-dublin-traceroute -help-routing
-```
-**What it does:** Shows educational explanation about:
-- Why you only see forward path
-- Asymmetric routing concept
-- How to analyze return paths
-
----
-
-### 14. Learn Route Comparison Techniques
-```powershell
-dublin-traceroute -tips
-```
-**What it does:** Shows tips for comparing traces over time to detect route changes.
-
----
-
-### 15. List Available Network Adapters
-```powershell
-dublin-traceroute -list-devices
-```
-**What it does:** Shows all network interfaces available for packet capture.
-
-**Use case:** 
-- Verify Npcap is working
-- Select specific adapter if you have multiple
-- Troubleshoot capture issues
-
----
-
-## Real-World Scenarios
+Below are practical real-world and automation examples:
 
 ### Scenario 1: ISP Performance Investigation
 **Problem:** Connection to work VPN is slow today.
@@ -520,84 +429,7 @@ Compare-Routes -BaselineFile "baseline.json" -CurrentFile "current.json"
 
 ---
 
-## Quick Reference
 
-| Scenario | Command |
-|----------|---------|
-| Basic UDP trace | `dublin-traceroute -target google.com` |
-| TCP trace (HTTPS) | `dublin-traceroute -target google.com -tcp -dport 443` |
-| TCP trace (HTTP) | `dublin-traceroute -target google.com -tcp -dport 80` |
-| Local network | `dublin-traceroute -target 192.168.1.1 -max-ttl 5` |
-| Find load balancing | `dublin-traceroute -target example.com -npaths 8` |
-| Save baseline | `dublin-traceroute -target server.com -output-json baseline.json` |
-| Quick test (fast) | `dublin-traceroute -target 8.8.8.8 -max-ttl 10 -npaths 2` |
-| Comprehensive | `dublin-traceroute -target example.com -npaths 12 -max-ttl 25` |
-| Learn about routing | `dublin-traceroute -help-routing` |
-| See adapters | `dublin-traceroute -list-devices` |
+## Quick Reference & Pro Tips
 
----
-
-## Pro Tips
-
-1. **Save baselines when things work well** - You can't troubleshoot without knowing what "normal" looks like
-
-2. **Use TCP for better results** - If UDP traceroute has high packet loss or many timeouts, try:
-   ```powershell
-   dublin-traceroute -target example.com -tcp -dport 443
-   ```
-   TCP often gets responses from more routers, especially through firewalls.
-
-3. **Use descriptive filenames** - Include target, date, and context:
-   ```powershell
-   dublin-traceroute -target vpn.company.com -output-json "vpn-morning-slow-20251122.json"
-   ```
-
-4. **Run multiple times** - Network is dynamic, single trace may not be representative
-
-5. **Higher npaths = better multipath detection** - But slower execution
-
-6. **Normal timeout rates: 30-70%** - Don't panic at packet loss in traceroute
-
-7. **Focus on latency jumps** - Big increases (>100ms) indicate problem areas
-
-8. **Compare geographic paths** - Unexpected routing (e.g., coast-to-coast when target is local) indicates issues
-
-9. **Document for escalations** - JSON files are great evidence when calling ISP support
-
-10. **Choose protocol wisely:**
-    - **UDP (default)**: Standard traceroute, works in most networks
-    - **TCP**: Better for corporate networks, firewalls, testing web traffic paths
-
----
-
-## Common Patterns
-
-**Morning performance issues:**
-```powershell
-# Run during problem hours
-dublin-traceroute -target problem-site.com -npaths 8 -output-json morning-slow.json
-
-# Run during good hours  
-dublin-traceroute -target problem-site.com -npaths 8 -output-json afternoon-fast.json
-
-# Compare: Look for route changes or latency patterns
-```
-
-**VPN troubleshooting:**
-```powershell
-# Test before VPN connects
-dublin-traceroute -target 8.8.8.8 -output-json pre-vpn.json
-
-# Test after VPN connects
-dublin-traceroute -target 8.8.8.8 -output-json during-vpn.json
-
-# Compare: VPN routes everything differently
-```
-
-**Load balancer validation:**
-```powershell
-# Maximum path detection
-dublin-traceroute -target your-loadbalancer.com -npaths 16 -max-ttl 15
-
-# Should show: "Multiple paths detected - traffic load-balanced across X routes"
-```
+For a summary of common commands, pro tips, and troubleshooting patterns, see [MTR_QUICK_REFERENCE.md](MTR_QUICK_REFERENCE.md).

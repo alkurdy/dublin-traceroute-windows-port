@@ -1,0 +1,28 @@
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+
+# Output directories
+bin/
+obj/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Go build cache
+*.out
+
+# IDE/editor configs
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+
+# Misc
+*.tmp
