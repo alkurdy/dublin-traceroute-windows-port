@@ -95,6 +95,7 @@ dublin-traceroute -target 10.172.23.218 -count 3 -max-ttl 5 -npaths 2 -timeout 1
 
 ---
 
+
 ## Understanding MTR Output
 
 ### Sample MTR Output:
@@ -106,21 +107,7 @@ TTL Host                                      Loss%    Snt      Min      Avg    
 3   router2.example.net. (198.51.100.1)   8.3%     12    3.5ms   18.2ms   25.8ms    7.1ms
 ```
 
-**What each column means:**
-- **TTL**: Hop number (distance from your computer)
-- **Host**: Router IP address and hostname
-- **Loss%**: Percentage of probes that timed out (0% = perfect)
-- **Snt**: Total probes sent to this hop
-- **Min/Avg/Max**: Fastest/average/slowest response time
-- **StdDev**: Jitter - how much RTT varies (low = consistent, high = unstable)
-
-**What to look for:**
-- ✅ **Loss% < 5%**: Excellent
-- ⚠️ **Loss% 5-20%**: Acceptable (may be ICMP rate limiting)
-- ❌ **Loss% > 50%**: Problem area - investigate further
-- ⚠️ **High StdDev**: Network congestion, queuing, or load balancing
-- 📊 **Increasing loss toward target**: Forward path issues
-- 🔄 **High loss everywhere**: Likely return path/ICMP filtering
+See [MTR_QUICK_REFERENCE.md](MTR_QUICK_REFERENCE.md) or [docs/MTR_MODE.md](docs/MTR_MODE.md) for a full explanation of output columns and interpretation tips.
 
 ---
 
