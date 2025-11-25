@@ -16,7 +16,7 @@
           "recv_time": "2025-11-22T10:35:51.1951755-05:00",
           "rtt": 337185000,
           "response_ip": "10.4.0.129",
-          "hostname": "gw-1629.net.vdi.abb.msad.",
+          "hostname": "gw-1629.example.net.",
           "icmp_type": 11
         },
         "1": {
