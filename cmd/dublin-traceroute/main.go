@@ -42,7 +42,7 @@ var (
 	// Path parameters
 	numPaths = flag.Uint("npaths", 4, "Number of paths to probe (parallel flows)")
 	probeCount = flag.Uint("count", 1, "Number of probes per hop for MTR-style statistics (1-10)")
-	timeout = flag.Uint("timeout", 0, "Probe timeout in milliseconds (default: UDP=3000ms, TCP=1000ms)")
+	timeout = flag.Uint("timeout", 0, "Probe timeout in milliseconds (UDP=3000ms, TCP=1000ms)")
 	
 	// Output parameters
 	outputJSON = flag.String("output-json", "", "Save results to JSON file")
