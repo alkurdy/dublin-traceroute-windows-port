@@ -130,7 +130,8 @@ func (tr *TracerouteResult) GetPaths() []Path {
 		}
 
 		// Collect all hops for this flow
-		for ttl := uint8(1); ttl <= 255; ttl++ {
+		for ttlInt := 1; ttlInt <= 255; ttlInt++ {
+			ttl := uint8(ttlInt)
 			hopResult, ok := tr.Hops[ttl]
 			if !ok {
 				break
@@ -202,9 +203,10 @@ func (tr *TracerouteResult) PrintSummary() {
 	for _, hopResult := range tr.Hops {
 		for _, flowResult := range hopResult.Flows {
 			totalProbes++
-			if flowResult.Error == "" {
+			switch flowResult.Error {
+			case "":
 				successfulProbes++
-			} else if flowResult.Error == "timeout" {
+			case "timeout":
 				timeouts++
 			}
 		}
