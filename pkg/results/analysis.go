@@ -79,7 +79,7 @@ func (tr *TracerouteResult) AnalyzeNetwork() *NetworkAnalysis {
 
 	// Detect high latency hops
 	prevRTT := time.Duration(0)
-	for ttl := uint8(1); ttl <= 255; ttl++ {
+	for ttl := uint8(1); ttl != 0; ttl++ {
 		hopResult, ok := tr.Hops[ttl]
 		if !ok {
 			break
@@ -103,7 +103,7 @@ func (tr *TracerouteResult) AnalyzeNetwork() *NetworkAnalysis {
 						} else if avgHopRTT > 200*time.Millisecond {
 							cause = "High latency link - possible congestion or routing inefficiency"
 						}
-						
+
 						analysis.HighLatencyHops = append(analysis.HighLatencyHops, LatencyIssue{
 							TTL:           ttl,
 							IP:            flowResult.ResponseIP,
@@ -144,17 +144,17 @@ func (tr *TracerouteResult) AnalyzeNetwork() *NetworkAnalysis {
 		analysis.Recommendations = append(analysis.Recommendations,
 			"High packet loss detected (>20%) - some routers may not respond to UDP probes, or there's network congestion")
 	}
-	
+
 	if analysis.HasLoadBalancing {
 		analysis.Recommendations = append(analysis.Recommendations,
 			"Load balancing detected - your traffic takes multiple paths, which can improve reliability and performance")
 	}
-	
+
 	if len(analysis.HighLatencyHops) > 0 {
 		analysis.Recommendations = append(analysis.Recommendations,
 			fmt.Sprintf("Found %d high-latency hop(s) - review LatencyIssue details below", len(analysis.HighLatencyHops)))
 	}
-	
+
 	if analysis.AverageRTT > 200*time.Millisecond {
 		analysis.Recommendations = append(analysis.Recommendations,
 			"High average latency detected - target may be geographically distant or network path is suboptimal")
@@ -169,14 +169,14 @@ func (tr *TracerouteResult) PrintNetworkAnalysis(analysis *NetworkAnalysis) {
 	fmt.Println(strings.Repeat("─", 80))
 	fmt.Println("📊 NETWORK ANALYSIS")
 	fmt.Println(strings.Repeat("─", 80))
-	
+
 	// Explain what this tool shows
 	fmt.Println("\n💡 What This Shows:")
 	fmt.Println("   This traceroute reveals the FORWARD PATH from your computer to the target.")
 	fmt.Println("   The return path (target → you) may be different due to asymmetric routing.")
 	fmt.Println("   Each 'hop' is a router that forwards your packets toward the destination.")
 	fmt.Println()
-	
+
 	// Load balancing analysis
 	if analysis.HasLoadBalancing {
 		fmt.Println("🔀 Load Balancing Detected:")
@@ -189,7 +189,7 @@ func (tr *TracerouteResult) PrintNetworkAnalysis(analysis *NetworkAnalysis) {
 		fmt.Println("   Your traffic follows a single path - no load balancing detected.")
 		fmt.Println()
 	}
-	
+
 	// Latency analysis
 	if len(analysis.HighLatencyHops) > 0 {
 		fmt.Println("⚠️  High Latency Hops:")
@@ -204,7 +204,7 @@ func (tr *TracerouteResult) PrintNetworkAnalysis(analysis *NetworkAnalysis) {
 			fmt.Println()
 		}
 	}
-	
+
 	// Packet loss interpretation
 	if analysis.PacketLossRate > 50 {
 		fmt.Println("📉 High Packet Loss:")
@@ -216,10 +216,10 @@ func (tr *TracerouteResult) PrintNetworkAnalysis(analysis *NetworkAnalysis) {
 	} else if analysis.PacketLossRate > 20 {
 		fmt.Printf("📊 Moderate Packet Loss: %.1f%% - Some routers not responding\n\n", analysis.PacketLossRate)
 	}
-	
+
 	// Geographic insights
 	tr.PrintGeographicInsights()
-	
+
 	// Recommendations
 	if len(analysis.Recommendations) > 0 {
 		fmt.Println("💡 Insights:")
@@ -228,7 +228,7 @@ func (tr *TracerouteResult) PrintNetworkAnalysis(analysis *NetworkAnalysis) {
 		}
 		fmt.Println()
 	}
-	
+
 	// Asymmetric routing explanation
 	if analysis.AsymmetricRouting {
 		fmt.Println("🔄 Asymmetric Routing Detected:")
@@ -236,41 +236,41 @@ func (tr *TracerouteResult) PrintNetworkAnalysis(analysis *NetworkAnalysis) {
 		fmt.Println("   This is common on the Internet and indicates load balancing.")
 		fmt.Println()
 	}
-	
+
 	fmt.Println(strings.Repeat("─", 80))
 }
 
 // PrintGeographicInsights provides geographic context based on hostnames
 func (tr *TracerouteResult) PrintGeographicInsights() {
 	locations := make(map[string]bool)
-	
+
 	for _, hopResult := range tr.Hops {
 		for _, flowResult := range hopResult.Flows {
 			if flowResult.Hostname == "" {
 				continue
 			}
-			
+
 			hostname := strings.ToLower(flowResult.Hostname)
-			
+
 			// Detect common location codes in hostnames
 			locationHints := map[string]string{
-				"nyc":    "New York",
-				"bstn":   "Boston",
-				"lax":    "Los Angeles",
-				"sfo":    "San Francisco",
-				"chi":    "Chicago",
-				"dfw":    "Dallas",
-				"sea":    "Seattle",
-				"mia":    "Miami",
-				"atl":    "Atlanta",
-				"lon":    "London",
-				"fra":    "Frankfurt",
-				"ams":    "Amsterdam",
-				"tok":    "Tokyo",
-				"sin":    "Singapore",
-				"syd":    "Sydney",
+				"nyc":  "New York",
+				"bstn": "Boston",
+				"lax":  "Los Angeles",
+				"sfo":  "San Francisco",
+				"chi":  "Chicago",
+				"dfw":  "Dallas",
+				"sea":  "Seattle",
+				"mia":  "Miami",
+				"atl":  "Atlanta",
+				"lon":  "London",
+				"fra":  "Frankfurt",
+				"ams":  "Amsterdam",
+				"tok":  "Tokyo",
+				"sin":  "Singapore",
+				"syd":  "Sydney",
 			}
-			
+
 			for code, location := range locationHints {
 				if strings.Contains(hostname, code) {
 					locations[location] = true
@@ -278,7 +278,7 @@ func (tr *TracerouteResult) PrintGeographicInsights() {
 			}
 		}
 	}
-	
+
 	if len(locations) > 0 {
 		fmt.Println("🌍 Geographic Path:")
 		fmt.Print("   Your traffic appears to traverse: ")
