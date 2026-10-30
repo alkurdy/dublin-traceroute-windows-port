@@ -131,3 +131,99 @@ func TestAnalyzeNetwork_RealRecordedTrace(t *testing.T) {
 		t.Error("Expected paths to be extracted from real trace")
 	}
 }
+
+// TestPrintParameterInsights_Variants verifies that parameter guidance renders
+// without panic across diverse parameter combinations: UDP, TCP, DNS (port 53),
+// Multipath, MTR count, aggressive/conservative timeouts, and reached/unreached targets.
+func TestPrintParameterInsights_Variants(t *testing.T) {
+	testCases := []struct {
+		name   string
+		result *TracerouteResult
+	}{
+		{
+			name: "Standard UDP default",
+			result: &TracerouteResult{
+				Target:     "8.8.8.8",
+				SrcIP:      "192.168.1.50",
+				Protocol:   "UDP",
+				SrcPort:    33434,
+				DstPort:    33434,
+				NumPaths:   1,
+				ProbeCount: 1,
+				Timeout:    1 * time.Second,
+				Hops:       make(map[uint8]*HopResult),
+			},
+		},
+		{
+			name: "UDP DNS Port 53",
+			result: &TracerouteResult{
+				Target:     "1.1.1.1",
+				SrcIP:      "192.168.1.50",
+				Protocol:   "UDP",
+				SrcPort:    33434,
+				DstPort:    53,
+				NumPaths:   2,
+				ProbeCount: 1,
+				Timeout:    400 * time.Millisecond, // Aggressive timeout
+				MaxTTL:     8,
+				Hops:       make(map[uint8]*HopResult),
+			},
+		},
+		{
+			name: "TCP Mode with Multipath and Conservative Timeout",
+			result: &TracerouteResult{
+				Target:     "93.184.216.34",
+				SrcIP:      "192.168.1.50",
+				Protocol:   "TCP",
+				SrcPort:    33434,
+				DstPort:    443,
+				NumPaths:   4,
+				ProbeCount: 3, // MTR mode
+				Timeout:    2500 * time.Millisecond,
+				MaxTTL:     15,
+				Hops:       make(map[uint8]*HopResult),
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Should execute without panic
+			tc.result.PrintParameterInsights()
+		})
+	}
+}
+
+// TestIsTargetReached validates detection of target response
+func TestIsTargetReached(t *testing.T) {
+	tr := &TracerouteResult{
+		Target: "8.8.8.8",
+		Hops:   make(map[uint8]*HopResult),
+	}
+
+	if tr.IsTargetReached() {
+		t.Error("Expected IsTargetReached to be false on empty hops")
+	}
+
+	// Add intermediate hop
+	tr.Hops[1] = &HopResult{
+		TTL: 1,
+		Flows: map[uint16]*FlowResult{
+			0: {ResponseIP: "192.168.1.1"},
+		},
+	}
+	if tr.IsTargetReached() {
+		t.Error("Expected IsTargetReached to be false when target hasn't responded")
+	}
+
+	// Add hop where target responded
+	tr.Hops[2] = &HopResult{
+		TTL: 2,
+		Flows: map[uint16]*FlowResult{
+			0: {ResponseIP: "8.8.8.8"},
+		},
+	}
+	if !tr.IsTargetReached() {
+		t.Error("Expected IsTargetReached to be true when target responded")
+	}
+}

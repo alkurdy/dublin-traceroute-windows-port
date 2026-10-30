@@ -357,8 +357,8 @@ func main() {
 
 	// Print summary or MTR-style output based on probe count
 	if *probeCount > 1 {
-		// MTR-style statistics table
-		result.PrintMTRStyle()
+		// MTR-style statistics table (respects -analyze flag)
+		result.PrintMTRStyle(*showAnalysis)
 	} else {
 		// Traditional summary (respects -analyze flag)
 		result.PrintSummary(*showAnalysis)

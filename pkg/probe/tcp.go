@@ -222,10 +222,18 @@ func (p *TCPProbe) Traceroute() (*results.TracerouteResult, error) {
 	defer cap.Close()
 
 	result := &results.TracerouteResult{
-		Target:    p.Target.String(),
-		SrcIP:     p.SrcIP.String(),
-		StartTime: time.Now(),
-		Hops:      make(map[uint8]*results.HopResult),
+		Target:     p.Target.String(),
+		SrcIP:      p.SrcIP.String(),
+		StartTime:  time.Now(),
+		Hops:       make(map[uint8]*results.HopResult),
+		Protocol:   "TCP",
+		SrcPort:    p.SrcPort,
+		DstPort:    p.DstPort,
+		NumPaths:   p.NumPaths,
+		MinTTL:     p.MinTTL,
+		MaxTTL:     p.MaxTTL,
+		ProbeCount: p.ProbeCount,
+		Timeout:    p.Timeout,
 	}
 
 	fmt.Printf("\nDublin Traceroute (TCP) to %s (%s)\n", p.Target, p.Target)
