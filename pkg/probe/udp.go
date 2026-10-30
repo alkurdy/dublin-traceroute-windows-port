@@ -206,6 +206,11 @@ func (p *UDPProbe) Traceroute() (*results.TracerouteResult, error) {
 	}
 
 	fmt.Printf("Dublin Traceroute to %s (%s)\n", p.Target, p.Target)
+	if natIP != "" && natIP != p.SrcIP.String() {
+		fmt.Printf("Local Host: %s -> NAT WAN Egress: %s\n", p.SrcIP, natIP)
+	} else if p.SrcIP != nil {
+		fmt.Printf("Local Host: %s\n", p.SrcIP)
+	}
 	fmt.Printf("Using UDP ports %d-%d, TTL %d-%d\n", p.SrcPort, p.SrcPort+p.NumPaths-1, p.MinTTL, p.MaxTTL)
 	
 	if p.ProbeCount > 1 {

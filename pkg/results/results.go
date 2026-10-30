@@ -264,7 +264,13 @@ func (tr *TracerouteResult) PrintSummary(showAnalysis ...bool) {
 	}
 
 	if len(validPaths) == 0 {
-		fmt.Println("No responsive hops discovered (all probes timed out).")
+		fmt.Println("No responsive downstream hops discovered (all probes timed out).")
+		if tr.SrcIP != "" {
+			fmt.Printf("\n   0: %-50s %8s\n", fmt.Sprintf("%s (Local Host)", tr.SrcIP), "0.0ms")
+			if tr.NatIP != "" && tr.NatIP != tr.SrcIP {
+				fmt.Printf("      ↳ NAT WAN Egress: %-42s %8s\n", tr.NatIP, "---")
+			}
+		}
 		fmt.Println()
 	} else {
 		fmt.Printf("Discovered %d unique path(s):\n", len(validPaths))

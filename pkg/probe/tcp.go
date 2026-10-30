@@ -244,6 +244,11 @@ func (p *TCPProbe) Traceroute() (*results.TracerouteResult, error) {
 	}
 
 	fmt.Printf("\nDublin Traceroute (TCP) to %s (%s)\n", p.Target, p.Target)
+	if natIP != "" && natIP != p.SrcIP.String() {
+		fmt.Printf("Local Host: %s -> NAT WAN Egress: %s\n", p.SrcIP, natIP)
+	} else if p.SrcIP != nil {
+		fmt.Printf("Local Host: %s\n", p.SrcIP)
+	}
 	fmt.Printf("Using TCP SYN to port %d, source ports %d-%d, TTL %d-%d\n", 
 		p.DstPort, p.SrcPort, p.SrcPort+p.NumPaths-1, p.MinTTL, p.MaxTTL)
 	fmt.Printf("Timeout per probe: %v\n", p.Timeout)
@@ -298,8 +303,8 @@ func (p *TCPProbe) Traceroute() (*results.TracerouteResult, error) {
 					continue
 				}
 
-				// Wait for ICMP response
-				packet, srcIP, err := cap.CaptureICMPResponse(p.SrcIP, p.Target, 0)
+				// Wait for ICMP (intermediate hop) or TCP SYN-ACK/RST (destination target) response
+				packet, srcIP, err := cap.CaptureTCPOrICMPResponse(p.SrcIP, p.Target, srcPort, p.DstPort)
 				
 				if err == nil && packet != nil && srcIP != nil {
 					flowResult.RecvTime = time.Now()
