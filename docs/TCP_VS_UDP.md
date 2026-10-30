@@ -299,38 +299,61 @@ dublin-traceroute -target vpn.company.com -tcp -dport 443 -npaths 4
 
 ---
 
-## Summary
+## The Critical Difference: Residential NAT vs Direct/Corporate Routing
 
-**Use UDP (default) for:**
-- General internet troubleshooting
-- Home/consumer networks
-- Matching traditional traceroute behavior
+### Why TCP Traceroute Often Times Out Behind Residential NAT
+When troubleshooting from a home broadband connection (FiOS, Comcast, Spectrum, Wi-Fi router, or mobile gateway), running `dublin-traceroute -tcp -dport 443` will often produce **100% timeouts on intermediate hops**:
+
+```text
+TTL= 1 Flow= 0: *
+TTL= 2 Flow= 0: *
+...
+TTL=15 Flow= 0: *
+```
+
+#### The Technical Reason:
+1. **Intermediate Routers Do Not Speak TCP**: When an intermediate transit router decrements a packet's TTL to 0, it drops the packet and emits an **ICMP Time Exceeded (Type 11)** message back to your public IP.
+2. **Stateful Connection Tracking (Conntrack)**: Residential Wi-Fi routers maintain a stateful NAT table.
+   - For **UDP**: UDP is connectionless. When an incoming ICMP Type 11 message arrives, the router inspects the embedded UDP header, matches the source port, and forwards the ICMP message back to your local PC (`192.168.x.x`). Hops respond cleanly!
+   - For **TCP**: The router's state table expects a full TCP 3-way handshake (SYN -> SYN-ACK -> ACK). Because low-TTL probes die mid-flight, the TCP connection is never established. When transit routers send ICMP Type 11 back to your router's WAN IP, the residential firewall finds **no active established TCP session** in its conntrack table and **silently drops the ICMP response**.
+3. **Target Hop Behavior**: A TCP response is only returned if the probe's TTL is high enough to reach the destination target alive, and the target port responds with TCP SYN-ACK or RST. All intermediate hops (1 through N-1) are dropped by the residential NAT firewall.
+
+### How Windows Packet Crafting Works Under the Hood
+Microsoft Windows kernel (`tcpip.sys`) has an intentional security restriction dating back to Windows XP SP2:
+- **Winsock raw sockets cannot send TCP packets** (attempts fail with `WSAEINVAL` / Error 10022).
+- To overcome this restriction natively on Windows without requiring Linux or WSL, Dublin Traceroute uses **Npcap Layer 2 Packet Injection**:
+  1. It discovers your local interface MAC and your default gateway MAC via Windows `SendARP` API.
+  2. It crafts full Ethernet + IPv4 + TCP SYN frames.
+  3. It injects the frames directly into the NDIS network driver via `pcap_sendpacket` (`WritePacketData`).
+  4. It listens for both ICMP Time Exceeded and destination TCP SYN-ACK / RST responses.
+
+---
+
+## Summary & Recommendations
+
+**Always use UDP (default) for:**
+- Home, apartment, or residential broadband connections
+- Testing behind consumer Wi-Fi gateways and NAT routers
+- Consistent hop-by-hop visibility across internet transit paths
+- Matching traditional `traceroute` and `mtr` tools
 
 **Use TCP (`-tcp -dport 443`) for:**
-- Corporate/enterprise networks
-- When UDP has high packet loss
-- Testing web service paths
-- Better hop visibility needed
-
-**Test both when:**
-- Diagnosing routing issues
-- Creating baseline documentation
-- Comparing protocol-specific paths
-- Maximizing path discovery
+- Enterprise networks with dedicated public IPs or NAT traversal gateways configured to forward ICMP
+- Cloud VMs (AWS EC2, Google Cloud Compute, Azure VMs) with elastic/public IPs
+- Testing whether a specific web application port (80/443) is reachable when UDP is blocked by a corporate egress firewall
+- Verifying TCP completion at the final destination host
 
 ---
 
 ## Quick Start
 
-Most users should start with TCP for best results:
-
 ```powershell
-# Recommended starting command (TCP HTTPS)
-dublin-traceroute -target example.com -tcp -dport 443 -max-ttl 15 -npaths 4
-```
+# Recommended command for home / residential broadband (UDP Multipath)
+dublin-traceroute -target example.com -max-ttl 15 -npaths 4
 
-This provides:
-- ✅ Good firewall traversal
-- ✅ Reasonable speed (~30-60 seconds)
-- ✅ Adequate multipath detection
-- ✅ Tests real web traffic path
+# Recommended command for MTR statistical analysis (5 probes per hop)
+dublin-traceroute -target example.com -count 5 -max-ttl 15
+
+# For cloud VMs or corporate networks without consumer NAT (TCP HTTPS)
+dublin-traceroute -target example.com -tcp -dport 443 -max-ttl 15
+```

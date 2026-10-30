@@ -53,16 +53,21 @@ dublin-traceroute -target example.com -output-json problem.json
 
 ### Path Display
 ```
-Path 0 (3 hops):
+Path 0 (3 hops) [Flows: 0, 1, 2, 3]:
+   0: 192.168.1.100 (Local Host)                         0.0ms
    1: your-gateway (192.168.1.1)                         2ms
+      ↳ NAT WAN Egress: 203.0.113.45                       ---
    5: isp-router (65.175.128.72)                        15ms
   10: backbone-router (168.143.191.66)                  45ms
 ```
 
 **What each line means:**
-- Number (1, 5, 10): TTL value - how many hops away
-- Hostname/IP: The router at that position
-- Time (2ms, 15ms, 45ms): Round-trip time to that hop
+- **Hop 0**: Your local PC running the trace (before packets hit the gateway).
+- **NAT WAN Egress**: The public WAN IP your router translates your connection into as it enters the ISP. (Automatically suppressed for internal LAN traces).
+- **Number (1, 5, 10)**: TTL value - how many hops away
+- **Flow Grouping (`[Flows: 0, 1]`):** Identical multipath flows are deduplicated into single clean paths.
+- **Hostname/IP**: The router at that position
+- **Time (2ms, 15ms, 45ms)**: Round-trip time to that hop
 
 **Missing hops (gaps in numbers):**
 - Normal! Some routers don't respond to traceroute

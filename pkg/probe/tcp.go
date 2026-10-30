@@ -40,6 +40,7 @@ type TCPProbe struct {
 	Verbose    bool   // Enables detailed debug logs during trace
 	socket     int
 	capture    *capture.WindowsCapture
+	netInfo    *platform.NetworkInfo
 }
 
 // NewTCPProbe creates a new TCP probe instance
@@ -76,17 +77,17 @@ func NewTCPProbe(target string, srcPort, dstPort, numPaths uint16, minTTL, maxTT
 		return nil, fmt.Errorf("IPv6 not supported yet")
 	}
 
-	// Get local IP
-	srcIPStr, err := platform.GetLocalIPv4Address()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get local IP: %w", err)
-	}
-	srcIP := net.ParseIP(srcIPStr)
-
-	// Create raw socket
-	sock, err := platform.CreateUDPSocket()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create raw socket: %w", err)
+	// Get network info (local IP/MAC and gateway IP/MAC for Npcap L2 injection)
+	netInfo, err := platform.GetNetworkInfo()
+	var srcIP net.IP
+	if err == nil && netInfo != nil {
+		srcIP = netInfo.LocalIP
+	} else {
+		srcIPStr, err := platform.GetLocalIPv4Address()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get local IP: %w", err)
+		}
+		srcIP = net.ParseIP(srcIPStr)
 	}
 
 	probe := &TCPProbe{
@@ -99,8 +100,8 @@ func NewTCPProbe(target string, srcPort, dstPort, numPaths uint16, minTTL, maxTT
 		MaxTTL:     maxTTL,
 		ProbeCount: probeCount,
 		Delay:      10 * time.Millisecond,
-		Timeout:    1 * time.Second,  // Shorter timeout for TCP (more responsive)
-		socket:     sock,
+		Timeout:    1 * time.Second, // Shorter timeout for TCP (more responsive)
+		netInfo:    netInfo,
 	}
 
 	return probe, nil
@@ -144,14 +145,14 @@ func (p *TCPProbe) Close() error {
 	return nil
 }
 
-// craftTCPPacket creates a TCP SYN packet with specified parameters
+// craftTCPPacket creates a TCP SYN packet (with Ethernet frame) with specified parameters
 func (p *TCPProbe) craftTCPPacket(ttl uint8, flowID uint16) ([]byte, error) {
 	// Create IP layer
 	ip := &layers.IPv4{
 		Version:  4,
 		IHL:      5,
 		TOS:      0,
-		Id:       uint16(time.Now().Unix() & 0xFFFF),
+		Id:       uint16(time.Now().UnixNano() & 0xFFFF),
 		Flags:    layers.IPv4DontFragment,
 		TTL:      ttl,
 		Protocol: layers.IPProtocolTCP,
@@ -166,7 +167,7 @@ func (p *TCPProbe) craftTCPPacket(ttl uint8, flowID uint16) ([]byte, error) {
 	tcp := &layers.TCP{
 		SrcPort: layers.TCPPort(srcPort),
 		DstPort: layers.TCPPort(p.DstPort),
-		Seq:     uint32(time.Now().Unix()),
+		Seq:     uint32(time.Now().UnixNano() & 0xFFFFFFFF),
 		SYN:     true,
 		Window:  65535,
 	}
@@ -174,13 +175,34 @@ func (p *TCPProbe) craftTCPPacket(ttl uint8, flowID uint16) ([]byte, error) {
 	// Set network layer for checksum calculation
 	tcp.SetNetworkLayerForChecksum(ip)
 
-	// Serialize packet
 	buf := gopacket.NewSerializeBuffer()
 	opts := gopacket.SerializeOptions{
 		ComputeChecksums: true,
 		FixLengths:       true,
 	}
 
+	// If Layer 2 NetworkInfo is available, encapsulate in Ethernet frame for Npcap injection
+	if p.netInfo != nil && p.netInfo.LocalMAC != nil && p.netInfo.GatewayMAC != nil {
+		dstMAC := p.netInfo.GatewayMAC
+		if p.Target.IsPrivate() || p.Target.IsLoopback() || p.Target.IsLinkLocalUnicast() {
+			if directMAC, err := platform.ResolveMAC(p.Target); err == nil && directMAC != nil {
+				dstMAC = directMAC
+			}
+		}
+
+		eth := &layers.Ethernet{
+			SrcMAC:       p.netInfo.LocalMAC,
+			DstMAC:       dstMAC,
+			EthernetType: layers.EthernetTypeIPv4,
+		}
+
+		if err := gopacket.SerializeLayers(buf, opts, eth, ip, tcp); err != nil {
+			return nil, fmt.Errorf("failed to serialize TCP packet: %w", err)
+		}
+		return buf.Bytes(), nil
+	}
+
+	// Fallback to IP layer only
 	if err := gopacket.SerializeLayers(buf, opts, ip, tcp); err != nil {
 		return nil, fmt.Errorf("failed to serialize TCP packet: %w", err)
 	}
@@ -188,26 +210,28 @@ func (p *TCPProbe) craftTCPPacket(ttl uint8, flowID uint16) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// sendProbe sends a single TCP SYN probe
+// sendProbe sends a single TCP SYN probe via Npcap packet injection (bypassing Windows Winsock raw TCP restrictions)
 func (p *TCPProbe) sendProbe(ttl uint8, flowID uint16) error {
 	packet, err := p.craftTCPPacket(ttl, flowID)
 	if err != nil {
 		return err
 	}
 
-	// Create destination sockaddr
-	dest := &windows.SockaddrInet4{
-		Port: int(p.DstPort),
-	}
-	copy(dest.Addr[:], p.Target.To4())
-
-	// Send packet
-	err = platform.SendPacket(p.socket, packet, dest)
-	if err != nil {
-		return fmt.Errorf("failed to send TCP probe: %w", err)
+	// Preferred path on Windows: inject via Npcap driver directly into NDIS
+	if p.capture != nil {
+		return p.capture.InjectPacket(packet)
 	}
 
-	return nil
+	// Fallback path if raw socket exists
+	if p.socket != 0 {
+		dest := &windows.SockaddrInet4{
+			Port: int(p.DstPort),
+		}
+		copy(dest.Addr[:], p.Target.To4())
+		return platform.SendPacket(p.socket, packet, dest)
+	}
+
+	return fmt.Errorf("no packet transmission channel available")
 }
 
 // Traceroute performs TCP-based multipath traceroute

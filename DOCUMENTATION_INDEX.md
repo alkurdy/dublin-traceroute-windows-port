@@ -28,6 +28,7 @@ Welcome to Dublin Traceroute for Windows! This guide will help you find the righ
 | Document | Purpose | When to Use |
 |----------|---------|-------------|
 | **[BUILD_AND_TEST.md](BUILD_AND_TEST.md)** | Build instructions and testing | Contributing or building from source |
+| **[CONTRIBUTING.md](CONTRIBUTING.md)** | Contribution standards and workflow | Submitting PRs and reporting bugs |
 | **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** | Development guidelines | Contributing code |
 | **[docs/STATUS.md](docs/STATUS.md)** | Project status and roadmap | Understanding project state |
 | **[RELEASE_NOTES_MTR.md](RELEASE_NOTES_MTR.md)** | MTR mode release notes | Understanding MTR implementation |

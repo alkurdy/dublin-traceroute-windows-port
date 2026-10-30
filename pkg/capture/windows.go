@@ -227,6 +227,14 @@ func (wc *WindowsCapture) CaptureMultipleResponses(srcIP net.IP, dstIP net.IP, c
 	return packets, sources, nil
 }
 
+// InjectPacket sends a raw link-layer frame (Ethernet) using Npcap
+func (wc *WindowsCapture) InjectPacket(packet []byte) error {
+	if wc.handle == nil {
+		return fmt.Errorf("capture handle is nil")
+	}
+	return wc.handle.WritePacketData(packet)
+}
+
 // Close closes the packet capture handle
 func (wc *WindowsCapture) Close() {
 	if wc.handle != nil {
