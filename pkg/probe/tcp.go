@@ -36,6 +36,8 @@ type TCPProbe struct {
 	ProbeCount int  // Number of probes per hop for MTR-style statistics
 	Delay      time.Duration
 	Timeout    time.Duration
+	Device     string // Network interface device used for packet capture
+	Verbose    bool   // Enables detailed debug logs during trace
 	socket     int
 	capture    *capture.WindowsCapture
 }
@@ -112,6 +114,23 @@ func (p *TCPProbe) SetTimeout(timeout time.Duration) {
 // SetDelay sets the delay between probes
 func (p *TCPProbe) SetDelay(delay time.Duration) {
 	p.Delay = delay
+}
+
+// SetVerbose enables or disables verbose debug logging
+func (p *TCPProbe) SetVerbose(verbose bool) {
+	p.Verbose = verbose
+}
+
+// SetDevice sets a specific network device for packet capture
+func (p *TCPProbe) SetDevice(device string) error {
+	p.Device = device
+	// Verify device can be opened with timeout
+	testCap, err := capture.NewCapture(device, p.Timeout)
+	if err != nil {
+		return fmt.Errorf("failed to open device %s: %w", device, err)
+	}
+	testCap.Close()
+	return nil
 }
 
 // Close cleans up resources
@@ -193,8 +212,9 @@ func (p *TCPProbe) sendProbe(ttl uint8, flowID uint16) error {
 
 // Traceroute performs TCP-based multipath traceroute
 func (p *TCPProbe) Traceroute() (*results.TracerouteResult, error) {
-	// Initialize packet capture
-	cap, err := capture.NewCapture("", 3*time.Second)
+	// Initialize packet capture with specified device and probe timeout
+	device := p.Device
+	cap, err := capture.NewCapture(device, p.Timeout)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize capture: %w", err)
 	}
@@ -244,9 +264,13 @@ func (p *TCPProbe) Traceroute() (*results.TracerouteResult, error) {
 				}
 
 				// Send probe
+				if p.Verbose {
+					fmt.Printf("[DEBUG] TTL=%2d Flow=%2d (Round %d): Sending TCP SYN probe %s:%d -> %s:%d\n",
+						ttl, flowID, round+1, p.SrcIP, srcPort, p.Target, p.DstPort)
+				}
 				sendErr := p.sendProbe(ttl, flowID)
 				if sendErr != nil {
-					if round == 0 {
+					if round == 0 || p.Verbose {
 						fmt.Printf("TTL=%2d Flow=%2d: Send failed: %v\n", ttl, flowID, sendErr)
 					}
 					flowResult.Error = sendErr.Error()
@@ -269,10 +293,14 @@ func (p *TCPProbe) Traceroute() (*results.TracerouteResult, error) {
 					
 					hopResult.Flows[uniqueFlowID] = flowResult
 
-					// Print result (only first round in MTR mode for cleaner output)
-					if round == 0 {
-						fmt.Printf("TTL=%2d Flow=%2d: %s (%s) %.4fms\n",
-							ttl, flowID, flowResult.ResponseIP, flowResult.Hostname, flowResult.RTT.Seconds()*1000)
+					// Print result (only first round in MTR mode for cleaner output, unless verbose)
+					if round == 0 || p.Verbose {
+						roundStr := ""
+						if p.Verbose && round > 0 {
+							roundStr = fmt.Sprintf(" (Round %d)", round+1)
+						}
+						fmt.Printf("TTL=%2d Flow=%2d%s: %s (%s) %.4fms\n",
+							ttl, flowID, roundStr, flowResult.ResponseIP, flowResult.Hostname, flowResult.RTT.Seconds()*1000)
 					}
 
 					// Check if we reached the target
@@ -283,8 +311,12 @@ func (p *TCPProbe) Traceroute() (*results.TracerouteResult, error) {
 					// Timeout or no response
 					flowResult.Error = "timeout"
 					hopResult.Flows[uniqueFlowID] = flowResult
-					if round == 0 {
-						fmt.Printf("TTL=%2d Flow=%2d: *\n", ttl, flowID)
+					if round == 0 || p.Verbose {
+						if p.Verbose {
+							fmt.Printf("TTL=%2d Flow=%2d (Round %d): * (timeout after %v)\n", ttl, flowID, round+1, p.Timeout)
+						} else {
+							fmt.Printf("TTL=%2d Flow=%2d: *\n", ttl, flowID)
+						}
 					}
 				}
 

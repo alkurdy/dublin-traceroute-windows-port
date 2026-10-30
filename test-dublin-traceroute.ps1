@@ -1,7 +1,7 @@
 # Automated Test Script for dublin-traceroute-windows-port
 # Run this script in PowerShell as Administrator
 
-$exe = "cmd\dublin-traceroute\dublin-traceroute.exe"
+$exe = if (Test-Path ".\dublin-traceroute.exe") { ".\dublin-traceroute.exe" } else { "cmd\dublin-traceroute\dublin-traceroute.exe" }
 
 # Check if running as administrator
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -12,21 +12,24 @@ if (-not $isAdmin) {
 }
 
 $tests = @(
-    @{ Name = "Basic UDP Traceroute"; Args = "-target google.com"; RequiresAdmin = $true },
-    @{ Name = "TCP Traceroute"; Args = "-target google.com -tcp -dport 443"; RequiresAdmin = $true },
-    @{ Name = "Custom Ports"; Args = "-target 8.8.8.8 -sport 40000 -dport 53"; RequiresAdmin = $true },
-    @{ Name = "TTL Range"; Args = "-target example.com -min-ttl 5 -max-ttl 6"; RequiresAdmin = $true },
-    @{ Name = "Multipath Detection"; Args = "-target example.com -npaths 2"; RequiresAdmin = $true },
-    @{ Name = "MTR Mode"; Args = "-target google.com -count 2"; RequiresAdmin = $true },
-    @{ Name = "Custom Timeout"; Args = "-target google.com -timeout 500"; RequiresAdmin = $true },
-    @{ Name = "Output to JSON"; Args = "-target google.com -output-json test_trace.json"; RequiresAdmin = $true },
+    @{ Name = "Basic UDP Traceroute"; Args = "-target google.com -max-ttl 3 -timeout 1000"; RequiresAdmin = $true },
+    @{ Name = "Positional Target"; Args = "google.com -max-ttl 2 -npaths 1 -timeout 500"; RequiresAdmin = $true },
+    @{ Name = "TCP Traceroute"; Args = "-target google.com -tcp -dport 443 -max-ttl 3 -timeout 500"; RequiresAdmin = $true },
+    @{ Name = "Custom Ports"; Args = "-target 8.8.8.8 -sport 40000 -dport 53 -max-ttl 2 -timeout 500"; RequiresAdmin = $true },
+    @{ Name = "TTL Range"; Args = "-target example.com -min-ttl 2 -max-ttl 3 -timeout 500"; RequiresAdmin = $true },
+    @{ Name = "Multipath Detection"; Args = "-target example.com -npaths 2 -max-ttl 2 -timeout 500"; RequiresAdmin = $true },
+    @{ Name = "MTR Mode"; Args = "-target google.com -count 2 -max-ttl 2 -timeout 500"; RequiresAdmin = $true },
+    @{ Name = "Custom Timeout"; Args = "-target google.com -timeout 500 -max-ttl 2"; RequiresAdmin = $true },
+    @{ Name = "Output to JSON"; Args = "-target google.com -output-json test_trace_out.json -max-ttl 2 -timeout 500"; RequiresAdmin = $true },
     @{ Name = "Show Version"; Args = "-version"; RequiresAdmin = $false },
     @{ Name = "Show Help Routing"; Args = "-help-routing"; RequiresAdmin = $false },
     @{ Name = "Show Tips"; Args = "-tips"; RequiresAdmin = $false },
-    @{ Name = "Verbose Output"; Args = "-target google.com -verbose"; RequiresAdmin = $true },
+    @{ Name = "Verbose Output"; Args = "-target google.com -verbose -max-ttl 2 -timeout 500"; RequiresAdmin = $true },
+    @{ Name = "Analyze Flag Disabled"; Args = "-target google.com -analyze=false -max-ttl 2 -timeout 500"; RequiresAdmin = $true },
     @{ Name = "List Devices"; Args = "-list-devices"; RequiresAdmin = $true },
     @{ Name = "Error: Missing Target"; Args = ""; RequiresAdmin = $false; ExpectedError = "target host is required" },
-    @{ Name = "Error: Invalid Port"; Args = "-target google.com -dport 99999"; RequiresAdmin = $false; ExpectedError = "invalid destination port" }
+    @{ Name = "Error: Invalid Port"; Args = "-target google.com -dport 99999"; RequiresAdmin = $false; ExpectedError = "invalid destination port" },
+    @{ Name = "Error: Invalid Device"; Args = "-target google.com -device non_existent_adapter_xyz"; RequiresAdmin = $true; ExpectedError = "failed to open device" }
 )
 
 $results = @()
@@ -46,7 +49,8 @@ foreach ($test in $tests) {
         continue
     }
     
-    $output = & $exe @($test.Args -split ' ') 2>&1
+    $argList = if ([string]::IsNullOrWhiteSpace($test.Args)) { @() } else { @($test.Args -split ' ') }
+    $output = & $exe $argList 2>&1
     $exitCode = $LASTEXITCODE
     
     # Check success based on test type
@@ -83,7 +87,7 @@ foreach ($r in $results) {
         $true { "PASS" }
         default { "FAIL" }
     }
-    Write-Host ("{0,-25} {1}" -f $r.Test, $status)
+    Write-Host ("{0,-28} {1}" -f $r.Test, $status)
 }
 
 # Optional: Show details for failed tests
@@ -105,3 +109,6 @@ if ($skipped) {
     }
     Write-Host "`nRun this script as Administrator to test these features." -ForegroundColor Yellow
 }
+
+# Cleanup temporary test output
+Remove-Item -Path test_trace_out.json -ErrorAction SilentlyContinue

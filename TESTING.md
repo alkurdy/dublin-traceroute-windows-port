@@ -10,18 +10,23 @@ Testing is structured into two decoupled tiers:
 
 ```
 +-------------------------------------------------------------------------+
-| TIER 1: Offline Go Unit Tests (CI-Ready, No Admin, No Npcap Required)   |
-| * Package: pkg/results                                                  |
-| * Tests: Serialization, path extraction, load-balancing detection,     |
-|   latency calculations, hop statistics, and real-trace replay.          |
+| TIER 1: Offline Go Unit Tests (CI-Ready, Local & Automated)             |
+| * Packages:                                                             |
+|   - cmd/dublin-traceroute: CLI flag validation & positional arguments   |
+|   - pkg/probe: UDP/TCP packet crafting, signatures, timeout/verbosity   |
+|   - pkg/capture: Device enumeration & IP lookup error handling          |
+|   - internal/platform: Privilege checking, Npcap install verification   |
+|   - pkg/results: Serialization, path extraction, load-balancing         |
+|     detection, latency calculations, hop statistics, & trace replay.    |
 +-------------------------------------------------------------------------+
                                     |
                                     v
 +-------------------------------------------------------------------------+
 | TIER 2: End-to-End Live Integration Tests (Requires Npcap & Admin)       |
 | * Script: test-dublin-traceroute.ps1                                    |
-| * Tests: Raw socket creation, Npcap packet capture, UDP/TCP probes,     |
-|   MTR continuous probing, CLI flag validation, JSON export.             |
+| * Tests: 18 scenarios verifying raw socket creation, Npcap packet      |
+|   capture, UDP/TCP probes, MTR continuous probing, CLI flags, JSON      |
+|   export, positional target syntax, and error boundaries.               |
 +-------------------------------------------------------------------------+
 ```
 
@@ -29,26 +34,29 @@ Testing is structured into two decoupled tiers:
 
 ## 2. Tier 1: Unit Testing (`go test`)
 
-Tier 1 tests run entirely in user-space without network dependencies, raw sockets, or administrative privileges. Suitable for local validation and automated GitHub Actions runners.
+Tier 1 tests run in user-space and validate core packet craftsmanship, parameter validation, and analysis engine logic without requiring raw packet sniffing permissions or network connectivity.
 
 ### Running Unit Tests
 
-Run all unit tests with verbose output:
+Run all unit tests across all packages:
 ```powershell
 go test -v ./...
 ```
 
-Run tests specifically for the results analysis engine:
+Run tests specifically for individual packages:
 ```powershell
+go test -v ./cmd/dublin-traceroute
+go test -v ./pkg/probe
 go test -v ./pkg/results
+go test -v ./pkg/capture
+go test -v ./internal/platform
 ```
 
 ### Checking Test Code Coverage
-Check statement coverage for the analysis and statistics engine:
+Check statement coverage for the results analysis engine:
 ```powershell
 go test -cover ./pkg/results
 ```
-*Current benchmark: **>80% statement coverage** across `analysis.go` and `results.go`.*
 
 Generate an HTML visual coverage report:
 ```powershell
@@ -58,18 +66,41 @@ go tool cover -html=coverage.out
 
 ### What the Unit Tests Verify
 
-| Test Name | Test Target | Verification Details |
-|-----------|-------------|----------------------|
-| `TestTracerouteResult_ToJSON` | `results.go` | Serializes result to JSON, verifies round-trip unmarshaling, checks field preservation. |
-| `TestTracerouteResult_GetPaths` | `results.go` | Extracts multi-flow paths, validates hop sequences, verifies target termination. |
-| `TestTracerouteResult_GetHopCount` | `results.go` | Validates max TTL computation across all probe flows. |
-| `TestTracerouteResult_GetUniqueHosts` | `results.go` | Deduplicates response IP addresses across multiple probes and flows. |
-| `TestTracerouteResult_CalculateHopStatistics` | `results.go` | Computes MTR-style per-hop statistics: min/max/avg RTT and packet loss rates. |
-| `TestAnalyzeNetwork_LoadBalancing` | `analysis.go` | Validates multipath detection when multiple distinct router IPs respond at the same TTL. |
-| `TestAnalyzeNetwork_PacketLoss` | `analysis.go` | Confirms packet loss calculation across successful vs timeout flows. |
-| `TestAnalyzeNetwork_HighLatencyJump` | `analysis.go` | Validates automated detection of high-latency router hops (>100ms or 3x jump). |
-| `TestAnalyzeNetwork_RealRecordedTrace` | `analysis.go` | Replays `test_trace.json` (real 1,300-line production trace) to ensure parser resilience. |
-| `TestTracerouteResult_PrintSummary_NoPanic` | `results.go` | Validates console table rendering and MTR output formatters execute without panicking. |
+| Package | Test Name | Verification Details |
+|---------|-----------|----------------------|
+| `cmd/dublin-traceroute` | `TestValidateParameters_MissingTarget` | Asserts exit error when no target host is supplied. |
+| `cmd/dublin-traceroute` | `TestParseArgs_LeadingPositionalTarget` | Validates `dublin-traceroute <host> [flags]` syntax. |
+| `cmd/dublin-traceroute` | `TestParseArgs_TrailingPositionalTarget` | Validates `dublin-traceroute [flags] <host>` syntax. |
+| `cmd/dublin-traceroute` | `TestValidateParameters_PortValidation` | Enforces port bounds (1-65535). |
+| `cmd/dublin-traceroute` | `TestValidateParameters_TTLValidation` | Enforces TTL bounds (1-255) and prevents `min-ttl > max-ttl`. |
+| `cmd/dublin-traceroute` | `TestValidateParameters_PortRangeOverflow` | Prevents flow source port math exceeding 65535. |
+| `cmd/dublin-traceroute` | `TestValidateParameters_ProbeCountValidation` | Enforces MTR probe count bounds (1-10). |
+| `cmd/dublin-traceroute` | `TestValidateParameters_NonTargetFlags` | Confirms utility flags (`-list-devices`, `-version`) run without a target. |
+| `pkg/probe` | `TestUDPProbe_CraftUDPPacket` | Validates IPv4 TTL, target IP, source port flow offset, and `0xDEADBEEFCAFEBABE` payload signature. |
+| `pkg/probe` | `TestUDPProbe_SetTimeout` | Verifies dynamic timeout configuration on UDP probe. |
+| `pkg/probe` | `TestUDPProbe_SetVerbose` | Tests verbose mode toggle on UDP probe. |
+| `pkg/probe` | `TestUDPProbe_SetDelay` | Verifies inter-probe delay adjustment. |
+| `pkg/probe` | `TestTCPProbe_CraftTCPPacket` | Validates TCP SYN packet generation, TTL, destination port, and source port flow offset. |
+| `pkg/probe` | `TestTCPProbe_SetTimeout` | Verifies dynamic timeout configuration on TCP probe. |
+| `pkg/probe` | `TestTCPProbe_SetVerbose` | Tests verbose mode toggle on TCP probe. |
+| `pkg/probe` | `TestTCPProbe_SetDelay` | Verifies inter-probe delay adjustment. |
+| `pkg/capture` | `TestListDevices` | Confirms Npcap device enumeration populates device name and metadata. |
+| `pkg/capture` | `TestFindDeviceByIP_NonExistent` | Validates clean error handling when querying non-existent IP address. |
+| `internal/platform` | `TestCheckNpcapInstalled` | Verifies detection of Npcap/WinPcap system driver DLLs. |
+| `internal/platform` | `TestGetNpcapInstallMessage` | Confirms install instructions contain documentation and compatible mode guides. |
+| `internal/platform` | `TestIsAdmin` | Validates Windows token privilege queries. |
+| `internal/platform` | `TestGetLocalIPv4Address` | Verifies operational unicast IPv4 adapter detection. |
+| `pkg/results` | `TestTracerouteResult_ToJSON` | Serializes result to JSON, verifies round-trip unmarshaling, checks field preservation. |
+| `pkg/results` | `TestTracerouteResult_GetPaths` | Extracts multi-flow paths, validates hop sequences, verifies target termination. |
+| `pkg/results` | `TestTracerouteResult_GetHopCount` | Validates max TTL computation across all probe flows. |
+| `pkg/results` | `TestTracerouteResult_GetUniqueHosts` | Deduplicates response IP addresses across multiple probes and flows. |
+| `pkg/results` | `TestTracerouteResult_CalculateHopStatistics` | Computes MTR-style per-hop statistics: min/max/avg RTT and packet loss rates. |
+| `pkg/results` | `TestAnalyzeNetwork_LoadBalancing` | Validates multipath detection when multiple distinct router IPs respond at the same TTL. |
+| `pkg/results` | `TestAnalyzeNetwork_PacketLoss` | Confirms packet loss calculation across successful vs timeout flows. |
+| `pkg/results` | `TestAnalyzeNetwork_HighLatencyJump` | Validates automated detection of high-latency router hops (>100ms or 3x jump). |
+| `pkg/results` | `TestAnalyzeNetwork_RealRecordedTrace` | Replays `test_trace.json` (real 1,300-line production trace) to ensure parser resilience. |
+| `pkg/results` | `TestTracerouteResult_PrintSummary_NoPanic` | Validates console table rendering and MTR output formatters execute without panicking. |
+| `pkg/results` | `TestTracerouteResult_PrintSummary_ShowAnalysisOption` | Confirms `PrintSummary` respects `-analyze=false` suppression. |
 
 ---
 
@@ -85,7 +116,7 @@ Tier 2 exercises the compiled binary against live targets, verifying Windows Npc
 
 Compile the binary first:
 ```powershell
-go build -v -o cmd\dublin-traceroute\dublin-traceroute.exe .\cmd\dublin-traceroute
+go build -v -o dublin-traceroute.exe .\cmd\dublin-traceroute
 ```
 
 Execute the test harness:
@@ -93,25 +124,28 @@ Execute the test harness:
 .\test-dublin-traceroute.ps1
 ```
 
-### The 15 E2E Test Scenarios
+### The 18 E2E Test Scenarios
 
-The PowerShell harness executes 15 distinct functional checks:
+The PowerShell harness executes 18 distinct functional checks:
 
 1. **Basic UDP Traceroute:** Sends UDP probes to `google.com` (ports 33434+).
-2. **TCP Traceroute:** Sends TCP SYN probes on port 443.
-3. **Custom Ports:** Uses source port 40000 and destination port 53.
-4. **TTL Range:** Restricts probing to hops 5 through 6.
-5. **Multipath Detection:** Probes with multiple concurrent flows (`-npaths 2`).
-6. **MTR Mode:** Executes multiple probe cycles (`-count 2`).
-7. **Custom Timeout:** Tests probe timeout configuration (`-timeout 500`).
-8. **JSON Export:** Validates file output (`-output-json test_trace.json`).
-9. **Show Version:** Validates non-admin version output.
-10. **Routing Help:** Tests help screen display.
-11. **Network Tips:** Validates diagnostic advice rendering.
-12. **Verbose Output:** Inspects debug logging during execution.
-13. **Device Listing:** Tests Npcap interface discovery (`-list-devices`).
-14. **Error Handling (Target):** Asserts exit behavior when target argument is omitted.
-15. **Error Handling (Port):** Asserts error handling on invalid port numbers (`-dport 99999`).
+2. **Positional Target:** Tests running target without flag (`dublin-traceroute.exe google.com`).
+3. **TCP Traceroute:** Sends TCP SYN probes on port 443 with responsive probe timeout.
+4. **Custom Ports:** Uses source port 40000 and destination port 53.
+5. **TTL Range:** Restricts probing to hops 2 through 3.
+6. **Multipath Detection:** Probes with multiple concurrent flows (`-npaths 2`).
+7. **MTR Mode:** Executes multiple probe cycles (`-count 2`).
+8. **Custom Timeout:** Tests probe timeout configuration (`-timeout 500`).
+9. **JSON Export:** Validates file output (`-output-json test_trace.json`).
+10. **Show Version:** Validates non-admin version output.
+11. **Routing Help:** Tests help screen display.
+12. **Network Tips:** Validates diagnostic advice rendering.
+13. **Verbose Output:** Inspects `[DEBUG]` logging during execution (`-verbose`).
+14. **Analyze Flag Disabled:** Confirms analysis section suppression (`-analyze=false`).
+15. **Device Listing:** Tests Npcap interface discovery (`-list-devices`).
+16. **Error Handling (Target):** Asserts exit behavior when target argument is omitted.
+17. **Error Handling (Port):** Asserts error handling on invalid port numbers (`-dport 99999`).
+18. **Error Handling (Device):** Asserts error handling when specifying non-existent network adapter (`-device`).
 
 ---
 

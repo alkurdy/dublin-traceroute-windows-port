@@ -190,10 +190,21 @@ func TestTracerouteResult_CalculateHopStatistics(t *testing.T) {
 	}
 }
 
+// TestTracerouteResult_PrintSummary_NoPanic tests that PrintSummary (default)
+// and PrintMTRStyle execute properly without panic on valid trace results.
 func TestTracerouteResult_PrintSummary_NoPanic(t *testing.T) {
 	tr := createSampleResult()
-	// Confirm full summary and MTR-style output printers execute without panic
 	tr.PrintSummary()
 	tr.PrintMTRStyle()
+}
+
+// TestTracerouteResult_PrintSummary_ShowAnalysisOption tests that PrintSummary
+// respects the showAnalysis flag, confirming both true and false execute cleanly.
+func TestTracerouteResult_PrintSummary_ShowAnalysisOption(t *testing.T) {
+	tr := createSampleResult()
+	// Test with analysis explicitly disabled (-analyze=false)
+	tr.PrintSummary(false)
+	// Test with analysis explicitly enabled (-analyze=true)
+	tr.PrintSummary(true)
 }
 

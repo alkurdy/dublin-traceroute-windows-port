@@ -35,6 +35,8 @@ type UDPProbe struct {
 	ProbeCount int  // Number of probes per hop for MTR-style statistics
 	Delay      time.Duration
 	Timeout    time.Duration
+	Device     string // Network interface device used for packet capture
+	Verbose    bool   // Enables detailed debug logs during trace
 	socket     int
 	capture    *capture.WindowsCapture
 }
@@ -219,9 +221,13 @@ func (p *UDPProbe) Traceroute() (*results.TracerouteResult, error) {
 				}
 
 				// Send probe
+				if p.Verbose {
+					fmt.Printf("[DEBUG] TTL=%2d Flow=%2d (Round %d): Sending UDP probe %s:%d -> %s:%d\n",
+						ttl, flowID, round+1, p.SrcIP, p.SrcPort+flowID, p.Target, p.DstPort)
+				}
 				err := p.sendProbe(ttl, flowID)
 				if err != nil {
-					if round == 0 {
+					if round == 0 || p.Verbose {
 						fmt.Printf("TTL=%2d Flow=%2d: Failed to send probe: %v\n", ttl, flowID, err)
 					}
 					flowResult.Error = err.Error()
@@ -235,8 +241,12 @@ func (p *UDPProbe) Traceroute() (*results.TracerouteResult, error) {
 					// Timeout or no response
 					flowResult.Error = "timeout"
 					hopResult.Flows[uniqueFlowID] = flowResult
-					if round == 0 {
-						fmt.Printf("TTL=%2d Flow=%2d: *\n", ttl, flowID)
+					if round == 0 || p.Verbose {
+						if p.Verbose {
+							fmt.Printf("TTL=%2d Flow=%2d (Round %d): * (timeout after %v)\n", ttl, flowID, round+1, p.Timeout)
+						} else {
+							fmt.Printf("TTL=%2d Flow=%2d: *\n", ttl, flowID)
+						}
 					}
 					continue
 				}
@@ -263,9 +273,13 @@ func (p *UDPProbe) Traceroute() (*results.TracerouteResult, error) {
 
 				hopResult.Flows[uniqueFlowID] = flowResult
 
-				// Print result (only first round in MTR mode for cleaner output)
-				if round == 0 {
-					fmt.Printf("TTL=%2d Flow=%2d: %s", ttl, flowID, srcIP)
+				// Print result (only first round in MTR mode for cleaner output, unless verbose)
+				if round == 0 || p.Verbose {
+					if p.Verbose && round > 0 {
+						fmt.Printf("TTL=%2d Flow=%2d (Round %d): %s", ttl, flowID, round+1, srcIP)
+					} else {
+						fmt.Printf("TTL=%2d Flow=%2d: %s", ttl, flowID, srcIP)
+					}
 					if flowResult.Hostname != "" {
 						fmt.Printf(" (%s)", flowResult.Hostname)
 					}
@@ -315,6 +329,25 @@ func (p *UDPProbe) SetDelay(delay time.Duration) {
 	p.Delay = delay
 }
 
+// SetVerbose enables or disables verbose debug output during probing
+func (p *UDPProbe) SetVerbose(verbose bool) {
+	p.Verbose = verbose
+}
+
+// SetDevice sets a specific network device for packet capture and re-initializes capture
+func (p *UDPProbe) SetDevice(device string) error {
+	p.Device = device
+	if p.capture != nil {
+		p.capture.Close()
+	}
+	cap, err := capture.NewCapture(device, p.Timeout)
+	if err != nil {
+		return fmt.Errorf("failed to open device %s: %w", device, err)
+	}
+	p.capture = cap
+	return nil
+}
+
 // SetTimeout sets the timeout for waiting for responses
 func (p *UDPProbe) SetTimeout(timeout time.Duration) {
 	p.Timeout = timeout
@@ -324,7 +357,6 @@ func (p *UDPProbe) SetTimeout(timeout time.Duration) {
 		p.capture.Close()
 		cap, err := capture.NewCapture(iface, timeout)
 		if err == nil {
-			cap.SetBPFFilter("icmp")
 			p.capture = cap
 		}
 	}

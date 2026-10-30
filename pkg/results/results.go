@@ -163,8 +163,10 @@ func (tr *TracerouteResult) GetPaths() []Path {
 	return paths
 }
 
-// PrintSummary prints a human-readable summary of the results
-func (tr *TracerouteResult) PrintSummary() {
+// PrintSummary prints a human-readable summary of the results.
+// The optional showAnalysis parameter controls whether detailed network analysis
+// insights are displayed (defaults to true if omitted).
+func (tr *TracerouteResult) PrintSummary(showAnalysis ...bool) {
 	fmt.Println("\n" + strings.Repeat("=", 80))
 	fmt.Printf("Dublin Traceroute Results\n")
 	fmt.Println(strings.Repeat("=", 80))
@@ -224,8 +226,14 @@ func (tr *TracerouteResult) PrintSummary() {
 	}
 	fmt.Printf("  Unique Routers:    %d\n", analysis.UniqueRouters)
 
-	// Print network analysis
-	tr.PrintNetworkAnalysis(analysis)
+	// Print network analysis if enabled (defaults to true)
+	enableAnalysis := true
+	if len(showAnalysis) > 0 {
+		enableAnalysis = showAnalysis[0]
+	}
+	if enableAnalysis {
+		tr.PrintNetworkAnalysis(analysis)
+	}
 
 	fmt.Println(strings.Repeat("=", 80))
 }
