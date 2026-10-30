@@ -6,51 +6,51 @@
 
 This project is a native Windows port based on the original [dublin-traceroute](https://github.com/insomniacslk/dublin-traceroute) by [insomniacslk](https://github.com/insomniacslk).
 
-Dublin Traceroute for Windows pre-built binary:
+### Download Pre-built Binary
 
-**[Download dublin-traceroute.exe](https://github.com/alkurdy/dublin-traceroute-windows-port/releases/download/v1.0.0-windows/dublin-traceroute.exe)**
+- **Direct Executable Download**: **[Download dublin-traceroute.exe (Latest)](https://github.com/alkurdy/dublin-traceroute-windows-port/raw/main/cmd/dublin-traceroute/dublin-traceroute.exe)**
+- **Releases Page**: **[GitHub Releases](https://github.com/alkurdy/dublin-traceroute-windows-port/releases)**
 
 Dublin Traceroute is a sophisticated network diagnostic tool that can trace multiple paths through a network, detect NAT traversal, and visualize complex network topologies. This is a native Windows port of the original dublin-traceroute project.
 
 ## Features
 
 - **Multipath Detection**: Discover all routes packets take through ECMP load-balanced networks
-- **MTR Mode (NEW!)**: Continuous probing with per-hop statistics (packet loss, latency, jitter)
-- **TCP & UDP Support**: TCP SYN mode for better firewall traversal, traditional UDP mode
-- **Return Path Analysis**: Statistical inference to detect ICMP filtering vs real network issues
-- **NAT Detection**: Identify Network Address Translation along the path
-- **Windows Native**: No WSL2, Docker, or Linux emulation required
-- **JSON Export**: Machine-readable output for integration with other tools
+- **MTR Mode**: Continuous probing with per-hop statistics (packet loss %, min/avg/max latency, jitter StdDev)
+- **TCP & UDP Support**: TCP SYN mode for stateful firewall traversal, traditional UDP mode
+- **Hop 0 & NAT Egress**: Resolves local machine IP (Hop 0) and discovers router public NAT WAN IP
+- **Return Path Analysis**: Statistical inference to detect router ICMP rate-limiting vs real network congestion
+- **Windows Native**: Pure Windows socket and Npcap packet capture (no WSL2, Docker, or Linux emulation required)
+- **JSON Export**: Machine-readable structured output for dashboards and tooling
 - **Raw Socket Support**: Direct packet crafting for maximum control
-- **Educational Features**: Built-in help for understanding routing, asymmetric paths, and diagnostics
 
 ## Requirements
 
 - **Windows 10 or 11** (64-bit)
-- **Administrator Privileges** (required for raw socket access)
-- **Npcap** (WinPcap successor) - [Download](https://npcap.com/#download)
-- **Go 1.21+** (for building from source)
+- **Administrator Privileges** (required for raw socket packet crafting)
+- **Npcap** (WinPcap successor) - [Download](https://npcap.com/#download) (install with "WinPcap API-compatible mode" enabled)
+- **Go 1.21+** (only if building from source)
 
 ## Installation
 
-### Pre-built Binary (Coming Soon)
-```powershell
-# Download from releases page
-# Extract dublin-traceroute.exe
-# Run as Administrator
-.\dublin-traceroute.exe 8.8.8.8
-```
+### Option 1: Direct Download (Pre-built)
+1. Download **[dublin-traceroute.exe](https://github.com/alkurdy/dublin-traceroute-windows-port/raw/main/cmd/dublin-traceroute/dublin-traceroute.exe)**
+2. Install [Npcap](https://npcap.com/#download) with "WinPcap API-compatible mode" checked.
+3. Open PowerShell as **Administrator** and run:
+   ```powershell
+   .\dublin-traceroute.exe 8.8.8.8
+   ```
 
-### Build from Source
+### Option 2: Build from Source
 ```powershell
 # Clone repository
-git clone https://github.com/atlanticbb/dublin-traceroute-windows.git
-cd dublin-traceroute-windows
+git clone https://github.com/alkurdy/dublin-traceroute-windows-port.git
+cd dublin-traceroute-windows-port
 
 # Download dependencies
 go mod download
 
-# Build
+# Build binary
 go build -o dublin-traceroute.exe ./cmd/dublin-traceroute
 
 # Run (requires Administrator)
@@ -59,17 +59,18 @@ go build -o dublin-traceroute.exe ./cmd/dublin-traceroute
 
 ## Quick Start
 
-
-## Quick Start
-
 ```powershell
-# Quick test (recommended)
+# Quick multipath test
 .\dublin-traceroute.exe -target google.com -max-ttl 12 -npaths 2
-# MTR mode (per-hop stats)
+
+# MTR statistical mode (per-hop packet loss, latency, jitter)
 .\dublin-traceroute.exe -target google.com -count 3 -max-ttl 15
+
+# TCP SYN mode to bypass UDP blocking
+.\dublin-traceroute.exe -target google.com -tcp -dport 443
 ```
 
-See [MTR_QUICK_REFERENCE.md](MTR_QUICK_REFERENCE.md) for more usage patterns and [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for a full manual.
+See [MTR_QUICK_REFERENCE.md](MTR_QUICK_REFERENCE.md) for more usage patterns and [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for the full user manual.
 
 
 ## Windows-Specific Notes
