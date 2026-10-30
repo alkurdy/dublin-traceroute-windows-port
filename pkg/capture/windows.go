@@ -168,52 +168,9 @@ func (wc *WindowsCapture) CaptureICMPResponse(srcIP net.IP, dstIP net.IP, expect
 				return nil, nil, fmt.Errorf("packet capture closed unexpectedly")
 			}
 
-			// Parse ICMP layer
-			icmpLayer := packet.Layer(layers.LayerTypeICMPv4)
-			if icmpLayer == nil {
-				continue
-			}
-
-			icmp, _ := icmpLayer.(*layers.ICMPv4)
-
-			// Check if this is the expected ICMP type
-			if expectedType != 0 && icmp.TypeCode != expectedType {
-				continue
-			}
-
-			// Parse IP layer to check source/destination
-			ipLayer := packet.Layer(layers.LayerTypeIPv4)
-			if ipLayer == nil {
-				continue
-			}
-
-			ip, _ := ipLayer.(*layers.IPv4)
-
-			// For Time Exceeded messages, check the embedded IP packet
-			if icmp.TypeCode.Type() == layers.ICMPv4TypeTimeExceeded {
-				// The payload contains the original IP header + 8 bytes of data
-				// We want to verify this was our packet
-				if len(icmp.Payload) < 20 {
-					continue // Not enough data for IP header
-				}
-
-				// Parse embedded IP header
-				embeddedIP := &layers.IPv4{}
-				err := embeddedIP.DecodeFromBytes(icmp.Payload, gopacket.NilDecodeFeedback)
-				if err != nil {
-					continue
-				}
-
-				// Check if embedded packet matches our probe
-				if embeddedIP.SrcIP.Equal(srcIP) && embeddedIP.DstIP.Equal(dstIP) {
-					return packet, ip.SrcIP, nil
-				}
-			} else if icmp.TypeCode.Type() == layers.ICMPv4TypeDestinationUnreachable ||
-				icmp.TypeCode.Type() == layers.ICMPv4TypeEchoReply {
-				// For other ICMP types, just check the outer IP addresses
-				if ip.DstIP.Equal(srcIP) {
-					return packet, ip.SrcIP, nil
-				}
+			matched, routerIP := MatchICMPResponse(packet, srcIP, dstIP, expectedType)
+			if matched {
+				return packet, routerIP, nil
 			}
 
 		case <-time.After(time.Until(deadline)):
@@ -244,32 +201,10 @@ func (wc *WindowsCapture) CaptureMultipleResponses(srcIP net.IP, dstIP net.IP, c
 				break
 			}
 
-			// Parse ICMP layer
-			icmpLayer := packet.Layer(layers.LayerTypeICMPv4)
-			if icmpLayer == nil {
-				continue
-			}
-
-			icmp, _ := icmpLayer.(*layers.ICMPv4)
-
-			// Parse IP layer
-			ipLayer := packet.Layer(layers.LayerTypeIPv4)
-			if ipLayer == nil {
-				continue
-			}
-
-			ip, _ := ipLayer.(*layers.IPv4)
-
-			// Check for Time Exceeded with embedded packet matching our probe
-			if icmp.TypeCode.Type() == layers.ICMPv4TypeTimeExceeded {
-				if len(icmp.Payload) >= 20 {
-					embeddedIP := &layers.IPv4{}
-					err := embeddedIP.DecodeFromBytes(icmp.Payload, gopacket.NilDecodeFeedback)
-					if err == nil && embeddedIP.SrcIP.Equal(srcIP) && embeddedIP.DstIP.Equal(dstIP) {
-						packets = append(packets, packet)
-						sources = append(sources, ip.SrcIP)
-					}
-				}
+			matched, routerIP := MatchICMPResponse(packet, srcIP, dstIP, 0)
+			if matched {
+				packets = append(packets, packet)
+				sources = append(sources, routerIP)
 			}
 
 		case <-time.After(time.Until(deadline)):
@@ -335,4 +270,51 @@ func PrintDeviceList() error {
 
 	fmt.Println()
 	return nil
+}
+
+// MatchICMPResponse evaluates if an incoming ICMP packet is a valid response to our traceroute probe.
+// For TimeExceeded (Type 11) and DestinationUnreachable (Type 3), it validates the embedded IP header
+// to ensure the original packet was sent from srcIP to dstIP. For EchoReply (Type 0), it validates
+// that the outer sender matches dstIP. This prevents capturing unrelated background ICMP traffic.
+func MatchICMPResponse(packet gopacket.Packet, srcIP, dstIP net.IP, expectedType layers.ICMPv4TypeCode) (bool, net.IP) {
+	icmpLayer := packet.Layer(layers.LayerTypeICMPv4)
+	if icmpLayer == nil {
+		return false, nil
+	}
+
+	icmp, _ := icmpLayer.(*layers.ICMPv4)
+	if expectedType != 0 && icmp.TypeCode != expectedType {
+		return false, nil
+	}
+
+	ipLayer := packet.Layer(layers.LayerTypeIPv4)
+	if ipLayer == nil {
+		return false, nil
+	}
+	ip, _ := ipLayer.(*layers.IPv4)
+
+	switch icmp.TypeCode.Type() {
+	case layers.ICMPv4TypeTimeExceeded, layers.ICMPv4TypeDestinationUnreachable:
+		// Time Exceeded and Destination Unreachable packets embed the original IP header + payload
+		if len(icmp.Payload) < 20 {
+			return false, nil
+		}
+		embeddedIP := &layers.IPv4{}
+		err := embeddedIP.DecodeFromBytes(icmp.Payload, gopacket.NilDecodeFeedback)
+		if err != nil {
+			return false, nil
+		}
+		// Strictly verify embedded packet matches our probe destination and source
+		if embeddedIP.SrcIP.Equal(srcIP) && embeddedIP.DstIP.Equal(dstIP) {
+			return true, ip.SrcIP
+		}
+
+	case layers.ICMPv4TypeEchoReply:
+		// Echo Reply comes directly from destination target to local source IP
+		if ip.SrcIP.Equal(dstIP) && ip.DstIP.Equal(srcIP) {
+			return true, ip.SrcIP
+		}
+	}
+
+	return false, nil
 }
