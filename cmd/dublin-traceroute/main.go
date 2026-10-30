@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/atlanticbb/dublin-traceroute-windows/internal/platform"
@@ -133,7 +134,12 @@ func checkPrerequisites() error {
 }
 
 func validateParameters() error {
-	if *target == "" && !*listDevices && !*showVersion {
+	// If target flag is empty, check for positional host argument
+	if *target == "" && flag.NArg() > 0 {
+		*target = flag.Arg(0)
+	}
+
+	if *target == "" && !*listDevices && !*showVersion && !*showHelp && !*showTips {
 		return fmt.Errorf("target host is required")
 	}
 
@@ -174,9 +180,28 @@ func validateParameters() error {
 	return nil
 }
 
+// parseArgs parses command-line arguments, supporting both flag options
+// and positional host arguments placed anywhere (beginning or end of arguments).
+func parseArgs(args []string) {
+	var argsToParse = args
+	var positionalTarget string
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		positionalTarget = args[0]
+		argsToParse = args[1:]
+	}
+	_ = flag.CommandLine.Parse(argsToParse)
+	if *target == "" {
+		if positionalTarget != "" {
+			*target = positionalTarget
+		} else if flag.NArg() > 0 {
+			*target = flag.Arg(0)
+		}
+	}
+}
+
 func main() {
-	// Parse command-line flags
-	flag.Parse()
+	// Parse command-line flags and positional arguments
+	parseArgs(os.Args[1:])
 
 	// Handle version flag
 	if *showVersion {
@@ -259,6 +284,19 @@ func main() {
 		if *timeout > 0 {
 			prober.SetTimeout(time.Duration(*timeout) * time.Millisecond)
 		}
+
+		// Set capture device if specified
+		if *device != "" {
+			if err := prober.SetDevice(*device); err != nil {
+				fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+				os.Exit(1)
+			}
+		}
+
+		// Set verbose mode if enabled
+		if *verbose {
+			prober.SetVerbose(true)
+		}
 		
 		fmt.Println("✓ Raw socket created")
 		fmt.Println("✓ Packet capture initialized")
@@ -291,6 +329,19 @@ func main() {
 		if *timeout > 0 {
 			prober.SetTimeout(time.Duration(*timeout) * time.Millisecond)
 		}
+
+		// Set capture device if specified
+		if *device != "" {
+			if err := prober.SetDevice(*device); err != nil {
+				fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+				os.Exit(1)
+			}
+		}
+
+		// Set verbose mode if enabled
+		if *verbose {
+			prober.SetVerbose(true)
+		}
 		
 		fmt.Println("✓ Raw socket created")
 		fmt.Println("✓ Packet capture initialized")
@@ -309,8 +360,8 @@ func main() {
 		// MTR-style statistics table
 		result.PrintMTRStyle()
 	} else {
-		// Traditional summary
-		result.PrintSummary()
+		// Traditional summary (respects -analyze flag)
+		result.PrintSummary(*showAnalysis)
 	}
 
 	// Save to JSON if requested
