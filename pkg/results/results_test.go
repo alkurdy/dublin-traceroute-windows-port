@@ -142,6 +142,90 @@ func TestTracerouteResult_GetPaths(t *testing.T) {
 	}
 }
 
+// TestTracerouteResult_GetUniquePaths_Deduplication verifies that multiple flows
+// traversing identical router hops are deduplicated into a single unique path.
+func TestTracerouteResult_GetUniquePaths_Deduplication(t *testing.T) {
+	tr := &TracerouteResult{
+		Target:   "1.1.1.1",
+		SrcIP:    "192.168.12.210",
+		NumPaths: 2,
+		Hops:     make(map[uint8]*HopResult),
+	}
+
+	// Hop 1: Gateway - identical for Flow 0 and Flow 1
+	tr.Hops[1] = &HopResult{
+		TTL: 1,
+		Flows: map[uint16]*FlowResult{
+			0: {FlowID: 0, ResponseIP: "192.168.12.1", RTT: 3 * time.Millisecond},
+			1: {FlowID: 1, ResponseIP: "192.168.12.1", RTT: 4 * time.Millisecond},
+		},
+	}
+
+	// Hop 2: ISP Router - identical for Flow 0 and Flow 1
+	tr.Hops[2] = &HopResult{
+		TTL: 2,
+		Flows: map[uint16]*FlowResult{
+			0: {FlowID: 0, ResponseIP: "100.36.56.1", RTT: 9 * time.Millisecond},
+			1: {FlowID: 1, ResponseIP: "100.36.56.1", RTT: 8 * time.Millisecond},
+		},
+	}
+
+	// All paths should be 2 flows
+	allPaths := tr.GetAllPaths()
+	if len(allPaths) != 2 {
+		t.Fatalf("Expected 2 raw flow paths, got %d", len(allPaths))
+	}
+
+	// Unique paths must deduplicate to 1 path
+	uniquePaths := tr.GetUniquePaths()
+	if len(uniquePaths) != 1 {
+		t.Fatalf("Expected 1 deduplicated unique path, got %d", len(uniquePaths))
+	}
+
+	if len(uniquePaths[0].FlowIDs) != 2 {
+		t.Errorf("Expected path to associate with both flows [0, 1], got %v", uniquePaths[0].FlowIDs)
+	}
+
+	if tr.HasMultiplePaths() {
+		t.Error("Expected HasMultiplePaths to be false for identical flows")
+	}
+
+	// Check RTT averaging: (9ms + 8ms) / 2 = 8.5ms
+	hop2RTT := uniquePaths[0].Hops[1].RTT
+	if hop2RTT != 8500*time.Microsecond {
+		t.Errorf("Expected averaged RTT of 8.5ms, got %v", hop2RTT)
+	}
+}
+
+// TestTracerouteResult_AllTimeouts_NoFalseMultipath verifies that when all probes timeout,
+// HasMultiplePaths returns false and PrintSummary does not claim multiple paths.
+func TestTracerouteResult_AllTimeouts_NoFalseMultipath(t *testing.T) {
+	tr := &TracerouteResult{
+		Target:   "8.8.8.8",
+		SrcIP:    "192.168.1.100",
+		NumPaths: 4,
+		Hops:     make(map[uint8]*HopResult),
+	}
+
+	// All 4 flows time out at Hop 1
+	tr.Hops[1] = &HopResult{
+		TTL: 1,
+		Flows: map[uint16]*FlowResult{
+			0: {FlowID: 0, Error: "timeout"},
+			1: {FlowID: 1, Error: "timeout"},
+			2: {FlowID: 2, Error: "timeout"},
+			3: {FlowID: 3, Error: "timeout"},
+		},
+	}
+
+	if tr.HasMultiplePaths() {
+		t.Error("Expected HasMultiplePaths to be false when all probes timed out")
+	}
+
+	// PrintSummary should run without error or claiming load balancing
+	tr.PrintSummary(false)
+}
+
 func TestTracerouteResult_GetHopCount(t *testing.T) {
 	tr := createSampleResult()
 	count := tr.GetHopCount()

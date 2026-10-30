@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 )
@@ -56,8 +57,9 @@ type FlowResult struct {
 
 // Path represents a unique path through the network
 type Path struct {
-	PathID int       `json:"path_id"`
-	Hops   []PathHop `json:"hops"`
+	PathID  int       `json:"path_id"`
+	FlowIDs []uint16  `json:"flow_ids,omitempty"`
+	Hops    []PathHop `json:"hops"`
 }
 
 // PathHop represents a single hop in a path
@@ -118,35 +120,39 @@ func (tr *TracerouteResult) ToJSON() (string, error) {
 	return string(data), nil
 }
 
-// GetPaths extracts unique paths from the traceroute results
-func (tr *TracerouteResult) GetPaths() []Path {
-	paths := make([]Path, 0)
-
-	// Get all flow IDs from the first hop
-	var flowIDs []uint16
-	if firstHop, ok := tr.Hops[1]; ok {
-		for flowID := range firstHop.Flows {
-			flowIDs = append(flowIDs, flowID)
+// GetAllPaths extracts paths for all probed flows
+func (tr *TracerouteResult) GetAllPaths() []Path {
+	flowIDMap := make(map[uint16]bool)
+	for _, hopResult := range tr.Hops {
+		for flowID := range hopResult.Flows {
+			flowIDMap[flowID] = true
 		}
 	}
 
-	// Build a path for each flow
-	for pathID, flowID := range flowIDs {
+	flowIDs := make([]uint16, 0, len(flowIDMap))
+	for flowID := range flowIDMap {
+		flowIDs = append(flowIDs, flowID)
+	}
+	sort.Slice(flowIDs, func(i, j int) bool { return flowIDs[i] < flowIDs[j] })
+
+	paths := make([]Path, 0, len(flowIDs))
+
+	for _, flowID := range flowIDs {
 		path := Path{
-			PathID: pathID,
-			Hops:   make([]PathHop, 0),
+			PathID:  int(flowID),
+			FlowIDs: []uint16{flowID},
+			Hops:    make([]PathHop, 0),
 		}
 
-		// Collect all hops for this flow
 		for ttlInt := 1; ttlInt <= 255; ttlInt++ {
 			ttl := uint8(ttlInt)
 			hopResult, ok := tr.Hops[ttl]
 			if !ok {
-				break
+				continue
 			}
 
 			flowResult, ok := hopResult.Flows[flowID]
-			if !ok || flowResult.Error != "" {
+			if !ok || flowResult.Error != "" || flowResult.ResponseIP == "" {
 				continue
 			}
 
@@ -156,10 +162,8 @@ func (tr *TracerouteResult) GetPaths() []Path {
 				Hostname: flowResult.Hostname,
 				RTT:      flowResult.RTT,
 			}
-
 			path.Hops = append(path.Hops, pathHop)
 
-			// Stop if we reached the target
 			if flowResult.ResponseIP == tr.Target {
 				break
 			}
@@ -169,6 +173,52 @@ func (tr *TracerouteResult) GetPaths() []Path {
 	}
 
 	return paths
+}
+
+// GetUniquePaths extracts unique paths from the traceroute results, deduplicating flows
+// that traverse identical sequences of router IPs and TTLs.
+func (tr *TracerouteResult) GetUniquePaths() []Path {
+	allPaths := tr.GetAllPaths()
+	uniquePaths := make([]Path, 0)
+
+	for _, p := range allPaths {
+		found := false
+		for i := range uniquePaths {
+			if pathsEqual(uniquePaths[i], p) {
+				uniquePaths[i].FlowIDs = append(uniquePaths[i].FlowIDs, p.FlowIDs...)
+				// Average the RTTs for each hop across matching flows
+				for hIdx := range uniquePaths[i].Hops {
+					if hIdx < len(p.Hops) {
+						existingRTT := uniquePaths[i].Hops[hIdx].RTT
+						newRTT := p.Hops[hIdx].RTT
+						if existingRTT > 0 && newRTT > 0 {
+							uniquePaths[i].Hops[hIdx].RTT = (existingRTT + newRTT) / 2
+						} else if newRTT > 0 {
+							uniquePaths[i].Hops[hIdx].RTT = newRTT
+						}
+					}
+				}
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			newPath := Path{
+				PathID:  len(uniquePaths),
+				FlowIDs: append([]uint16(nil), p.FlowIDs...),
+				Hops:    append([]PathHop(nil), p.Hops...),
+			}
+			uniquePaths = append(uniquePaths, newPath)
+		}
+	}
+
+	return uniquePaths
+}
+
+// GetPaths returns the unique network paths discovered during the trace
+func (tr *TracerouteResult) GetPaths() []Path {
+	return tr.GetUniquePaths()
 }
 
 // PrintSummary prints a human-readable summary of the results.
@@ -187,22 +237,43 @@ func (tr *TracerouteResult) PrintSummary(showAnalysis ...bool) {
 	analysis := tr.AnalyzeNetwork()
 
 	paths := tr.GetPaths()
-	fmt.Printf("Discovered %d unique path(s):\n", len(paths))
-	if len(paths) > 1 {
-		fmt.Printf("  ℹ️  Multiple paths detected - your traffic is load-balanced across %d routes\n", len(paths))
+	// Filter valid paths with at least 1 responding hop
+	validPaths := make([]Path, 0)
+	for _, p := range paths {
+		if len(p.Hops) > 0 {
+			validPaths = append(validPaths, p)
+		}
 	}
-	fmt.Println()
 
-	for _, path := range paths {
-		fmt.Printf("Path %d (%d hops):\n", path.PathID, len(path.Hops))
-		for _, hop := range path.Hops {
-			hostname := hop.IP
-			if hop.Hostname != "" {
-				hostname = fmt.Sprintf("%s (%s)", hop.Hostname, hop.IP)
-			}
-			fmt.Printf("  %2d: %-50s %8v\n", hop.TTL, hostname, hop.RTT)
+	if len(validPaths) == 0 {
+		fmt.Println("No responsive hops discovered (all probes timed out).")
+		fmt.Println()
+	} else {
+		fmt.Printf("Discovered %d unique path(s):\n", len(validPaths))
+		if len(validPaths) > 1 {
+			fmt.Printf("  ℹ️  Multiple paths detected - your traffic is load-balanced across %d routes\n", len(validPaths))
 		}
 		fmt.Println()
+
+		for _, path := range validPaths {
+			flowInfo := ""
+			if tr.NumPaths > 1 && len(path.FlowIDs) > 0 {
+				flowStrs := make([]string, len(path.FlowIDs))
+				for i, fid := range path.FlowIDs {
+					flowStrs[i] = fmt.Sprintf("%d", fid)
+				}
+				flowInfo = fmt.Sprintf(" [Flows: %s]", strings.Join(flowStrs, ", "))
+			}
+			fmt.Printf("Path %d (%d hops)%s:\n", path.PathID, len(path.Hops), flowInfo)
+			for _, hop := range path.Hops {
+				hostname := hop.IP
+				if hop.Hostname != "" {
+					hostname = fmt.Sprintf("%s (%s)", hop.Hostname, hop.IP)
+				}
+				fmt.Printf("  %2d: %-50s %8v\n", hop.TTL, hostname, hop.RTT)
+			}
+			fmt.Println()
+		}
 	}
 
 	// Print statistics
@@ -274,34 +345,26 @@ func (tr *TracerouteResult) GetUniqueHosts() []string {
 	return hosts
 }
 
-// HasMultiplePaths checks if multiple paths were detected
+// HasMultiplePaths checks if multiple unique paths were detected
 func (tr *TracerouteResult) HasMultiplePaths() bool {
-	paths := tr.GetPaths()
-
-	// Check if any two paths differ
-	if len(paths) <= 1 {
-		return false
-	}
-
-	for i := 0; i < len(paths)-1; i++ {
-		for j := i + 1; j < len(paths); j++ {
-			if !pathsEqual(paths[i], paths[j]) {
-				return true
-			}
+	paths := tr.GetUniquePaths()
+	validPaths := 0
+	for _, p := range paths {
+		if len(p.Hops) > 0 {
+			validPaths++
 		}
 	}
-
-	return false
+	return validPaths > 1
 }
 
-// pathsEqual compares two paths for equality
+// pathsEqual compares two paths for equality (TTL and IP sequence)
 func pathsEqual(p1, p2 Path) bool {
 	if len(p1.Hops) != len(p2.Hops) {
 		return false
 	}
 
 	for i := range p1.Hops {
-		if p1.Hops[i].IP != p2.Hops[i].IP {
+		if p1.Hops[i].TTL != p2.Hops[i].TTL || p1.Hops[i].IP != p2.Hops[i].IP {
 			return false
 		}
 	}
