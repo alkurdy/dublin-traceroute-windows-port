@@ -330,6 +330,13 @@ func (tr *TracerouteResult) PrintParameterInsights() {
 		fmt.Println("       Try increasing search depth with '-max-ttl 30'.")
 	}
 
+	// 6. NAT Egress Guidance
+	if tr.NatIP != "" && tr.NatIP != tr.SrcIP {
+		fmt.Printf("   • NAT Traversal (Public WAN: %s):\n", tr.NatIP)
+		fmt.Printf("     - Local machine (%s) is translated by your gateway into NAT WAN IP %s\n", tr.SrcIP, tr.NatIP)
+		fmt.Println("       before entering your ISP's routing domain.")
+	}
+
 	fmt.Println()
 }
 

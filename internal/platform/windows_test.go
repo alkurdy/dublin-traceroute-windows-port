@@ -49,3 +49,10 @@ func TestGetLocalIPv4Address(t *testing.T) {
 	}
 	t.Logf("Discovered local IPv4: %s", ip)
 }
+
+// TestGetPublicNATIP tests fast external NAT IP discovery via DNS reflection.
+func TestGetPublicNATIP(t *testing.T) {
+	natIP := GetPublicNATIP()
+	t.Logf("Discovered Public NAT IP: %s", natIP)
+	// NAT IP may be empty if offline, but must not panic or cause fatal error
+}
