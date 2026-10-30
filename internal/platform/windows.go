@@ -10,8 +10,11 @@
 package platform
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -218,4 +221,44 @@ Installation Instructions:
 
 Npcap is the modern replacement for WinPcap and is required for
 packet capture on Windows 10/11.`
+}
+
+// GetPublicNATIP attempts to discover the external/public NAT WAN IP address
+// using fast DNS reflection (OpenDNS / Cloudflare) with a conservative timeout.
+// Returns an empty string if offline or unavailable without failing the trace.
+func GetPublicNATIP() string {
+	ctx, cancel := context.WithTimeout(context.Background(), 800*time.Millisecond)
+	defer cancel()
+
+	// Method 1: Fast DNS reflection via OpenDNS resolver
+	r := &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			d := net.Dialer{Timeout: 400 * time.Millisecond}
+			return d.DialContext(ctx, "udp", "208.67.222.222:53")
+		},
+	}
+	ips, err := r.LookupHost(ctx, "myip.opendns.com")
+	if err == nil && len(ips) > 0 {
+		if parsed := net.ParseIP(ips[0]); parsed != nil && parsed.To4() != nil {
+			return parsed.String()
+		}
+	}
+
+	// Method 2: Fast DNS reflection via Cloudflare resolver
+	r2 := &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			d := net.Dialer{Timeout: 400 * time.Millisecond}
+			return d.DialContext(ctx, "udp", "1.1.1.1:53")
+		},
+	}
+	txts, err := r2.LookupTXT(ctx, "whoami.cloudflare")
+	if err == nil && len(txts) > 0 {
+		if parsed := net.ParseIP(txts[0]); parsed != nil && parsed.To4() != nil {
+			return parsed.String()
+		}
+	}
+
+	return ""
 }

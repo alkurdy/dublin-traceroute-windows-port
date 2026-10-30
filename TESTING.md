@@ -90,6 +90,7 @@ go tool cover -html=coverage.out
 | `internal/platform` | `TestGetNpcapInstallMessage` | Confirms install instructions contain documentation and compatible mode guides. |
 | `internal/platform` | `TestIsAdmin` | Validates Windows token privilege queries. |
 | `internal/platform` | `TestGetLocalIPv4Address` | Verifies operational unicast IPv4 adapter detection. |
+| `internal/platform` | `TestGetPublicNATIP` | Verifies fast public NAT WAN IP discovery via DNS reflection. |
 | `pkg/results` | `TestTracerouteResult_ToJSON` | Serializes result to JSON, verifies round-trip unmarshaling, checks field preservation. |
 | `pkg/results` | `TestTracerouteResult_GetPaths` | Extracts multi-flow paths, validates hop sequences, verifies target termination. |
 | `pkg/results` | `TestTracerouteResult_GetHopCount` | Validates max TTL computation across all probe flows. |

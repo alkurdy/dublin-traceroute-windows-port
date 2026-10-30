@@ -224,6 +224,7 @@ func (p *TCPProbe) Traceroute() (*results.TracerouteResult, error) {
 	result := &results.TracerouteResult{
 		Target:     p.Target.String(),
 		SrcIP:      p.SrcIP.String(),
+		NatIP:      platform.GetPublicNATIP(),
 		StartTime:  time.Now(),
 		Hops:       make(map[uint8]*results.HopResult),
 		Protocol:   "TCP",

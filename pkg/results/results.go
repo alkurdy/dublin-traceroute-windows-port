@@ -20,6 +20,7 @@ import (
 type TracerouteResult struct {
 	Target     string               `json:"target"`
 	SrcIP      string               `json:"src_ip"`
+	NatIP      string               `json:"nat_ip,omitempty"`
 	StartTime  time.Time            `json:"start_time"`
 	EndTime    time.Time            `json:"end_time"`
 	Duration   time.Duration        `json:"duration"`
@@ -228,9 +229,12 @@ func (tr *TracerouteResult) PrintSummary(showAnalysis ...bool) {
 	fmt.Println("\n" + strings.Repeat("=", 80))
 	fmt.Printf("Dublin Traceroute Results\n")
 	fmt.Println(strings.Repeat("=", 80))
-	fmt.Printf("Target:   %s\n", tr.Target)
-	fmt.Printf("Source:   %s\n", tr.SrcIP)
-	fmt.Printf("Duration: %v\n", tr.Duration)
+	fmt.Printf("Target:     %s\n", tr.Target)
+	fmt.Printf("Local Host: %s\n", tr.SrcIP)
+	if tr.NatIP != "" && tr.NatIP != tr.SrcIP {
+		fmt.Printf("NAT WAN IP: %s (Router egress to ISP)\n", tr.NatIP)
+	}
+	fmt.Printf("Duration:   %v\n", tr.Duration)
 	fmt.Println()
 
 	// Get analysis
@@ -265,12 +269,23 @@ func (tr *TracerouteResult) PrintSummary(showAnalysis ...bool) {
 				flowInfo = fmt.Sprintf(" [Flows: %s]", strings.Join(flowStrs, ", "))
 			}
 			fmt.Printf("Path %d (%d hops)%s:\n", path.PathID, len(path.Hops), flowInfo)
+
+			// Print Hop 0: Local host machine IP before gateway
+			if tr.SrcIP != "" {
+				fmt.Printf("   0: %-50s %8s\n", fmt.Sprintf("%s (Local Host)", tr.SrcIP), "0.0ms")
+			}
+
 			for _, hop := range path.Hops {
 				hostname := hop.IP
 				if hop.Hostname != "" {
 					hostname = fmt.Sprintf("%s (%s)", hop.Hostname, hop.IP)
 				}
 				fmt.Printf("  %2d: %-50s %8v\n", hop.TTL, hostname, hop.RTT)
+
+				// If Hop 1 (local gateway) and NAT WAN IP is detected, show NAT translation point
+				if hop.TTL == 1 && tr.NatIP != "" && tr.NatIP != tr.SrcIP {
+					fmt.Printf("      ↳ NAT WAN Egress: %-42s %8s\n", tr.NatIP, "---")
+				}
 			}
 			fmt.Println()
 		}
@@ -531,13 +546,23 @@ func (tr *TracerouteResult) PrintMTRStyle(showAnalysis ...bool) {
 	}
 
 	fmt.Println("\n=== MTR-Style Statistics ===")
-	fmt.Printf("Target: %s (%s)\n", tr.Target, tr.SrcIP)
+	natInfo := ""
+	if tr.NatIP != "" && tr.NatIP != tr.SrcIP {
+		natInfo = fmt.Sprintf(" | NAT WAN: %s", tr.NatIP)
+	}
+	fmt.Printf("Target: %s (%s%s)\n", tr.Target, tr.SrcIP, natInfo)
 	fmt.Printf("Duration: %v\n\n", tr.Duration.Round(time.Millisecond))
 
 	// Header
 	fmt.Printf("%-3s %-40s %6s %6s %8s %8s %8s %8s\n",
 		"TTL", "Host", "Loss%", "Snt", "Min", "Avg", "Max", "StdDev")
 	fmt.Println(strings.Repeat("-", 110))
+
+	// Hop 0: Local host
+	if tr.SrcIP != "" {
+		fmt.Printf("%-3d %-40s %5.1f%% %6s %8s %8s %8s %8s\n",
+			0, fmt.Sprintf("%s (Local Host)", tr.SrcIP), 0.0, "-", "0.0ms", "0.0ms", "0.0ms", "0.0ms")
+	}
 
 	// Rows
 	for _, ttl := range ttls {
