@@ -319,6 +319,65 @@ func MatchICMPResponse(packet gopacket.Packet, srcIP, dstIP net.IP, expectedType
 	return false, nil
 }
 
+// MatchTCPOrICMPResponse matches intermediate ICMP TimeExceeded/Unreachable OR destination TCP response (SYN-ACK / RST)
+func MatchTCPOrICMPResponse(packet gopacket.Packet, srcIP, dstIP net.IP, srcPort, dstPort uint16) (bool, net.IP) {
+	// First check for ICMP response from intermediate hop
+	if matched, routerIP := MatchICMPResponse(packet, srcIP, dstIP, 0); matched {
+		return true, routerIP
+	}
+
+	// Check for direct TCP response from destination target (SYN-ACK or RST)
+	ipLayer := packet.Layer(layers.LayerTypeIPv4)
+	if ipLayer == nil {
+		return false, nil
+	}
+	ip, _ := ipLayer.(*layers.IPv4)
+
+	// Must be from destination target to local source IP
+	if !ip.SrcIP.Equal(dstIP) || !ip.DstIP.Equal(srcIP) {
+		return false, nil
+	}
+
+	tcpLayer := packet.Layer(layers.LayerTypeTCP)
+	if tcpLayer == nil {
+		return false, nil
+	}
+	tcp, _ := tcpLayer.(*layers.TCP)
+
+	// Verify TCP ports match our probe flow
+	if uint16(tcp.SrcPort) == dstPort && uint16(tcp.DstPort) == srcPort {
+		return true, ip.SrcIP
+	}
+
+	return false, nil
+}
+
+// CaptureTCPOrICMPResponse captures either an intermediate ICMP or target TCP response
+func (wc *WindowsCapture) CaptureTCPOrICMPResponse(srcIP, dstIP net.IP, srcPort, dstPort uint16) (gopacket.Packet, net.IP, error) {
+	deadline := time.Now().Add(wc.timeout)
+
+	for {
+		select {
+		case packet, ok := <-wc.packetChan:
+			if !ok || packet == nil {
+				return nil, nil, fmt.Errorf("packet capture closed unexpectedly")
+			}
+
+			matched, responseIP := MatchTCPOrICMPResponse(packet, srcIP, dstIP, srcPort, dstPort)
+			if matched {
+				return packet, responseIP, nil
+			}
+
+		case <-time.After(time.Until(deadline)):
+			return nil, nil, fmt.Errorf("timeout waiting for probe response")
+		}
+
+		if time.Now().After(deadline) {
+			return nil, nil, fmt.Errorf("timeout waiting for probe response")
+		}
+	}
+}
+
 // Drain clears any queued packets from the channel before starting a new probe
 func (wc *WindowsCapture) Drain() {
 	for {
