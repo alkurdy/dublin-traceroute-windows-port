@@ -24,9 +24,11 @@ import (
 
 // WindowsCapture handles packet capture on Windows using Npcap
 type WindowsCapture struct {
-	handle  *pcap.Handle
-	iface   string
-	timeout time.Duration
+	handle       *pcap.Handle
+	packetSource *gopacket.PacketSource
+	packetChan   <-chan gopacket.Packet
+	iface        string
+	timeout      time.Duration
 }
 
 // Device represents a network device available for capture
@@ -129,18 +131,22 @@ func NewCapture(device string, timeout time.Duration) (*WindowsCapture, error) {
 		}
 	}
 
-	// Open device for capture
-	// Snapshot length 65535 (max), promiscuous mode enabled
-	handle, err := pcap.OpenLive(device, 65535, true, timeout)
+	// Open device for capture with 10ms driver buffer timeout for low-latency delivery
+	handle, err := pcap.OpenLive(device, 65535, true, 10*time.Millisecond)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open device %s: %w\n"+
 			"Ensure Npcap is installed and running as administrator", device, err)
 	}
 
+	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
+	packetChan := packetSource.Packets()
+
 	return &WindowsCapture{
-		handle:  handle,
-		iface:   device,
-		timeout: timeout,
+		handle:       handle,
+		packetSource: packetSource,
+		packetChan:   packetChan,
+		iface:        device,
+		timeout:      timeout,
 	}, nil
 }
 
@@ -156,15 +162,12 @@ func (wc *WindowsCapture) SetBPFFilter(filter string) error {
 // CaptureICMPResponse captures ICMP responses matching the specified criteria
 // Returns the response packet and the source IP
 func (wc *WindowsCapture) CaptureICMPResponse(srcIP net.IP, dstIP net.IP, expectedType layers.ICMPv4TypeCode) (gopacket.Packet, net.IP, error) {
-	packetSource := gopacket.NewPacketSource(wc.handle, wc.handle.LinkType())
-	packetChan := packetSource.Packets()
-
 	deadline := time.Now().Add(wc.timeout)
 
 	for {
 		select {
-		case packet := <-packetChan:
-			if packet == nil {
+		case packet, ok := <-wc.packetChan:
+			if !ok || packet == nil {
 				return nil, nil, fmt.Errorf("packet capture closed unexpectedly")
 			}
 
@@ -189,15 +192,12 @@ func (wc *WindowsCapture) CaptureMultipleResponses(srcIP net.IP, dstIP net.IP, c
 	packets := make([]gopacket.Packet, 0, count)
 	sources := make([]net.IP, 0, count)
 
-	packetSource := gopacket.NewPacketSource(wc.handle, wc.handle.LinkType())
-	packetChan := packetSource.Packets()
-
 	deadline := time.Now().Add(wc.timeout)
 
 	for len(packets) < count {
 		select {
-		case packet := <-packetChan:
-			if packet == nil {
+		case packet, ok := <-wc.packetChan:
+			if !ok || packet == nil {
 				break
 			}
 
@@ -317,4 +317,15 @@ func MatchICMPResponse(packet gopacket.Packet, srcIP, dstIP net.IP, expectedType
 	}
 
 	return false, nil
+}
+
+// Drain clears any queued packets from the channel before starting a new probe
+func (wc *WindowsCapture) Drain() {
+	for {
+		select {
+		case <-wc.packetChan:
+		default:
+			return
+		}
+	}
 }

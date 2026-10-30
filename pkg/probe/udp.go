@@ -220,6 +220,11 @@ func (p *UDPProbe) Traceroute() (*results.TracerouteResult, error) {
 					SentTime: time.Now(),
 				}
 
+				// Drain stale packets before sending
+				if p.capture != nil {
+					p.capture.Drain()
+				}
+
 				// Send probe
 				if p.Verbose {
 					fmt.Printf("[DEBUG] TTL=%2d Flow=%2d (Round %d): Sending UDP probe %s:%d -> %s:%d\n",
@@ -252,7 +257,13 @@ func (p *UDPProbe) Traceroute() (*results.TracerouteResult, error) {
 				}
 				
 				flowResult.RecvTime = time.Now()
+				if packet != nil && packet.Metadata() != nil && !packet.Metadata().Timestamp.IsZero() {
+					flowResult.RecvTime = packet.Metadata().Timestamp
+				}
 				flowResult.RTT = flowResult.RecvTime.Sub(flowResult.SentTime)
+				if flowResult.RTT < 0 {
+					flowResult.RTT = time.Now().Sub(flowResult.SentTime)
+				}
 				flowResult.ResponseIP = srcIP.String()
 
 				// Parse ICMP response

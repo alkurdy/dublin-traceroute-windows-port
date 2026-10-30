@@ -263,6 +263,11 @@ func (p *TCPProbe) Traceroute() (*results.TracerouteResult, error) {
 					SentTime: time.Now(),
 				}
 
+				// Drain stale packets before sending
+				if cap != nil {
+					cap.Drain()
+				}
+
 				// Send probe
 				if p.Verbose {
 					fmt.Printf("[DEBUG] TTL=%2d Flow=%2d (Round %d): Sending TCP SYN probe %s:%d -> %s:%d\n",
@@ -283,7 +288,13 @@ func (p *TCPProbe) Traceroute() (*results.TracerouteResult, error) {
 				
 				if err == nil && packet != nil && srcIP != nil {
 					flowResult.RecvTime = time.Now()
+					if packet != nil && packet.Metadata() != nil && !packet.Metadata().Timestamp.IsZero() {
+						flowResult.RecvTime = packet.Metadata().Timestamp
+					}
 					flowResult.RTT = flowResult.RecvTime.Sub(flowResult.SentTime)
+					if flowResult.RTT < 0 {
+						flowResult.RTT = time.Now().Sub(flowResult.SentTime)
+					}
 					flowResult.ResponseIP = srcIP.String()
 					
 					// Only lookup hostname on first round to avoid delays
