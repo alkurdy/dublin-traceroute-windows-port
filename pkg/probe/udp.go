@@ -183,10 +183,16 @@ func (p *UDPProbe) sendProbe(ttl uint8, flowID uint16) error {
 
 // Traceroute executes the Dublin Traceroute algorithm
 func (p *UDPProbe) Traceroute() (*results.TracerouteResult, error) {
+	// Only discover public NAT IP if destination is external/public
+	var natIP string
+	if !p.Target.IsPrivate() && !p.Target.IsLoopback() && !p.Target.IsLinkLocalUnicast() && !p.Target.IsUnspecified() {
+		natIP = platform.GetPublicNATIP()
+	}
+
 	result := &results.TracerouteResult{
 		Target:     p.Target.String(),
 		SrcIP:      p.SrcIP.String(),
-		NatIP:      platform.GetPublicNATIP(),
+		NatIP:      natIP,
 		StartTime:  time.Now(),
 		Hops:       make(map[uint8]*results.HopResult),
 		Protocol:   "UDP",
