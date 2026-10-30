@@ -3,9 +3,13 @@ name: CI & Build
 on:
   push:
     branches: [ "main" ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-and-test:
@@ -40,3 +44,13 @@ jobs:
           name: dublin-traceroute-windows-amd64
           path: dublin-traceroute.exe
           if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dublin-traceroute.exe
+          name: Dublin Traceroute for Windows ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
