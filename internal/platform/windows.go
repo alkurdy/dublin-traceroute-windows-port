@@ -11,6 +11,7 @@ package platform
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"net"
 	"syscall"
@@ -27,10 +28,12 @@ const (
 )
 
 var (
-	modadvapi32                  = windows.NewLazySystemDLL("advapi32.dll")
-	procGetTokenInformation      = modadvapi32.NewProc("GetTokenInformation")
-	modshell32                   = windows.NewLazySystemDLL("shell32.dll")
-	procIsUserAnAdmin            = modshell32.NewProc("IsUserAnAdmin")
+	modadvapi32             = windows.NewLazySystemDLL("advapi32.dll")
+	procGetTokenInformation = modadvapi32.NewProc("GetTokenInformation")
+	modshell32              = windows.NewLazySystemDLL("shell32.dll")
+	procIsUserAnAdmin       = modshell32.NewProc("IsUserAnAdmin")
+	modiphlpapi             = windows.NewLazySystemDLL("iphlpapi.dll")
+	procSendARP             = modiphlpapi.NewProc("SendARP")
 )
 
 // IsAdmin checks if the current process is running with administrator privileges
@@ -261,4 +264,96 @@ func GetPublicNATIP() string {
 	}
 
 	return ""
+}
+
+// ResolveMAC resolves the MAC address for an IPv4 address using the Windows SendARP API
+func ResolveMAC(ip net.IP) (net.HardwareAddr, error) {
+	ip4 := ip.To4()
+	if ip4 == nil {
+		return nil, fmt.Errorf("IPv4 required for ARP resolution")
+	}
+	var mac [6]byte
+	macLen := uint32(len(mac))
+	ipUint := binary.LittleEndian.Uint32(ip4)
+
+	ret, _, err := procSendARP.Call(
+		uintptr(ipUint),
+		0,
+		uintptr(unsafe.Pointer(&mac[0])),
+		uintptr(unsafe.Pointer(&macLen)),
+	)
+	if ret != 0 {
+		return nil, fmt.Errorf("SendARP failed with code %d: %w", ret, err)
+	}
+	return net.HardwareAddr(mac[:]), nil
+}
+
+// NetworkInfo contains Layer 2 and Layer 3 addressing for packet injection
+type NetworkInfo struct {
+	LocalIP    net.IP
+	LocalMAC   net.HardwareAddr
+	GatewayIP  net.IP
+	GatewayMAC net.HardwareAddr
+}
+
+// GetNetworkInfo resolves local IP/MAC and default gateway IP/MAC
+func GetNetworkInfo() (*NetworkInfo, error) {
+	var size uint32
+	err := windows.GetAdaptersAddresses(windows.AF_INET, GAA_FLAG_SKIP_ANYCAST|GAA_FLAG_SKIP_MULTICAST, 0, nil, &size)
+	if err != nil && err != windows.ERROR_BUFFER_OVERFLOW {
+		return nil, fmt.Errorf("failed to get adapter size: %w", err)
+	}
+
+	buf := make([]byte, size)
+	adapterAddresses := (*windows.IpAdapterAddresses)(unsafe.Pointer(&buf[0]))
+	err = windows.GetAdaptersAddresses(windows.AF_INET, GAA_FLAG_SKIP_ANYCAST|GAA_FLAG_SKIP_MULTICAST, 0, adapterAddresses, &size)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get adapters: %w", err)
+	}
+
+	for adapter := adapterAddresses; adapter != nil; adapter = adapter.Next {
+		if adapter.OperStatus != windows.IfOperStatusUp || adapter.PhysicalAddressLength == 0 {
+			continue
+		}
+
+		var localIP net.IP
+		for unicast := adapter.FirstUnicastAddress; unicast != nil; unicast = unicast.Next {
+			addr := unicast.Address.IP()
+			if addr.To4() != nil && !addr.IsLoopback() {
+				localIP = addr
+				break
+			}
+		}
+
+		if localIP == nil {
+			continue
+		}
+
+		localMAC := net.HardwareAddr(adapter.PhysicalAddress[:adapter.PhysicalAddressLength])
+
+		var gatewayIP net.IP
+		if adapter.FirstGatewayAddress != nil {
+			gw := adapter.FirstGatewayAddress.Address.IP()
+			if gw.To4() != nil {
+				gatewayIP = gw
+			}
+		}
+
+		var gatewayMAC net.HardwareAddr
+		if gatewayIP != nil {
+			gwMAC, err := ResolveMAC(gatewayIP)
+			if err == nil {
+				gatewayMAC = gwMAC
+			}
+		}
+
+		return &NetworkInfo{
+			LocalIP:    localIP,
+			LocalMAC:   localMAC,
+			GatewayIP:  gatewayIP,
+			GatewayMAC: gatewayMAC,
+		}, nil
+	}
+
+	return nil, fmt.Errorf("no operational network adapter found")
 }
