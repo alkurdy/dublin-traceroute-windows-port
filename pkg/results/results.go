@@ -11,10 +11,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net"
 	"sort"
 	"strings"
 	"time"
 )
+
+// isInternalTarget returns true if the target string is a private, loopback, or link-local IP
+func isInternalTarget(target string) bool {
+	ip := net.ParseIP(target)
+	if ip == nil {
+		return false
+	}
+	return ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()
+}
 
 // TracerouteResult represents the complete result of a Dublin Traceroute
 type TracerouteResult struct {
@@ -229,7 +239,11 @@ func (tr *TracerouteResult) PrintSummary(showAnalysis ...bool) {
 	fmt.Println("\n" + strings.Repeat("=", 80))
 	fmt.Printf("Dublin Traceroute Results\n")
 	fmt.Println(strings.Repeat("=", 80))
-	fmt.Printf("Target:     %s\n", tr.Target)
+	if isInternalTarget(tr.Target) {
+		fmt.Printf("Target:     %s (Internal / Private LAN - No NAT Traversal)\n", tr.Target)
+	} else {
+		fmt.Printf("Target:     %s\n", tr.Target)
+	}
 	fmt.Printf("Local Host: %s\n", tr.SrcIP)
 	if tr.NatIP != "" && tr.NatIP != tr.SrcIP {
 		fmt.Printf("NAT WAN IP: %s (Router egress to ISP)\n", tr.NatIP)
@@ -549,6 +563,8 @@ func (tr *TracerouteResult) PrintMTRStyle(showAnalysis ...bool) {
 	natInfo := ""
 	if tr.NatIP != "" && tr.NatIP != tr.SrcIP {
 		natInfo = fmt.Sprintf(" | NAT WAN: %s", tr.NatIP)
+	} else if isInternalTarget(tr.Target) {
+		natInfo = " | Internal LAN (No NAT)"
 	}
 	fmt.Printf("Target: %s (%s%s)\n", tr.Target, tr.SrcIP, natInfo)
 	fmt.Printf("Duration: %v\n\n", tr.Duration.Round(time.Millisecond))

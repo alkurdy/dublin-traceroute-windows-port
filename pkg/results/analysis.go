@@ -330,8 +330,12 @@ func (tr *TracerouteResult) PrintParameterInsights() {
 		fmt.Println("       Try increasing search depth with '-max-ttl 30'.")
 	}
 
-	// 6. NAT Egress Guidance
-	if tr.NatIP != "" && tr.NatIP != tr.SrcIP {
+	// 6. NAT Egress Guidance / Internal Network Guidance
+	if isInternalTarget(tr.Target) {
+		fmt.Printf("   • Internal / Private Network Path:\n")
+		fmt.Printf("     - Destination %s is on a private/local network (RFC 1918 / loopback / link-local).\n", tr.Target)
+		fmt.Println("       Traffic is routed or switched internally without traversing a NAT gateway or egressing to the WAN.")
+	} else if tr.NatIP != "" && tr.NatIP != tr.SrcIP {
 		fmt.Printf("   • NAT Traversal (Public WAN: %s):\n", tr.NatIP)
 		fmt.Printf("     - Local machine (%s) is translated by your gateway into NAT WAN IP %s\n", tr.SrcIP, tr.NatIP)
 		fmt.Println("       before entering your ISP's routing domain.")

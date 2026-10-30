@@ -227,3 +227,29 @@ func TestIsTargetReached(t *testing.T) {
 		t.Error("Expected IsTargetReached to be true when target responded")
 	}
 }
+
+func TestIsInternalTarget(t *testing.T) {
+	internalTests := []struct {
+		target   string
+		expected bool
+	}{
+		{"127.0.0.1", true},
+		{"10.0.0.1", true},
+		{"172.16.0.1", true},
+		{"172.31.255.254", true},
+		{"192.168.1.1", true},
+		{"192.168.12.213", true},
+		{"169.254.10.20", true},
+		{"8.8.8.8", false},
+		{"1.1.1.1", false},
+		{"100.15.226.237", false},
+		{"invalid-ip", false},
+	}
+
+	for _, tc := range internalTests {
+		got := isInternalTarget(tc.target)
+		if got != tc.expected {
+			t.Errorf("isInternalTarget(%q) = %v; want %v", tc.target, got, tc.expected)
+		}
+	}
+}
