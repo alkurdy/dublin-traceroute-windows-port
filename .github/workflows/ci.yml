@@ -27,7 +27,7 @@ jobs:
         run: go mod verify
 
       - name: Run Unit Tests with Coverage
-        run: go test -v -coverprofile=coverage.out ./...
+        run: go test -v -coverprofile coverage.out ./...
 
       - name: Build Windows Executable
         run: |
