@@ -184,10 +184,18 @@ func (p *UDPProbe) sendProbe(ttl uint8, flowID uint16) error {
 // Traceroute executes the Dublin Traceroute algorithm
 func (p *UDPProbe) Traceroute() (*results.TracerouteResult, error) {
 	result := &results.TracerouteResult{
-		Target:    p.Target.String(),
-		SrcIP:     p.SrcIP.String(),
-		StartTime: time.Now(),
-		Hops:      make(map[uint8]*results.HopResult),
+		Target:     p.Target.String(),
+		SrcIP:      p.SrcIP.String(),
+		StartTime:  time.Now(),
+		Hops:       make(map[uint8]*results.HopResult),
+		Protocol:   "UDP",
+		SrcPort:    p.SrcPort,
+		DstPort:    p.DstPort,
+		NumPaths:   p.NumPaths,
+		MinTTL:     p.MinTTL,
+		MaxTTL:     p.MaxTTL,
+		ProbeCount: p.ProbeCount,
+		Timeout:    p.Timeout,
 	}
 
 	fmt.Printf("Dublin Traceroute to %s (%s)\n", p.Target, p.Target)

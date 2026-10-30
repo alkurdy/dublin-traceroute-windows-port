@@ -237,7 +237,100 @@ func (tr *TracerouteResult) PrintNetworkAnalysis(analysis *NetworkAnalysis) {
 		fmt.Println()
 	}
 
+	// Parameter-specific guidance and diagnostics
+	tr.PrintParameterInsights()
+
 	fmt.Println(strings.Repeat("─", 80))
+}
+
+// PrintParameterInsights displays contextual guidance and diagnostic interpretation
+// tailored to the specific parameters used during the trace.
+func (tr *TracerouteResult) PrintParameterInsights() {
+	fmt.Println("⚙️  Parameter-Specific Guidance & Diagnostics:")
+
+	// 1. Protocol and Port Guidance
+	proto := tr.Protocol
+	if proto == "" {
+		proto = "UDP"
+	}
+
+	if proto == "TCP" {
+		dstPort := tr.DstPort
+		if dstPort == 0 {
+			dstPort = 80
+		}
+		fmt.Printf("   • Protocol (TCP SYN to port %d):\n", dstPort)
+		fmt.Printf("     - Stateful Traversal: TCP SYN on web ports (80/443) traverses corporate & stateful firewalls that block UDP.\n")
+		fmt.Printf("     - Target Completion: Open target ports return TCP SYN-ACK; closed ports return TCP RST.\n")
+		fmt.Printf("     - Local NAT Note: If Hop 1 or 2 times out (*), your local NAT router may silently drop outbound\n")
+		fmt.Printf("       low-TTL TCP packets without returning ICMP Time Exceeded (Type 11).\n")
+	} else {
+		dstPort := tr.DstPort
+		if dstPort == 0 {
+			dstPort = 33434
+		}
+		fmt.Printf("   • Protocol (UDP to port %d):\n", dstPort)
+		fmt.Printf("     - Standard Probing: Intermediate hops decrement TTL to 0 and emit ICMP Time Exceeded (Type 11).\n")
+		fmt.Printf("     - Target Completion: Destination host responds with ICMP Port Unreachable (Type 3, Code 3).\n")
+		if dstPort == 53 {
+			fmt.Printf("     - DNS Port 53: Target DNS servers often silently drop non-DNS UDP payloads without returning\n")
+			fmt.Printf("       Port Unreachable. Timeouts (*) at the final target hop on port 53 are expected.\n")
+		} else {
+			fmt.Printf("     - High UDP Ports (%d+): Timeouts (*) at intermediate hops are common because transit routers\n", dstPort)
+			fmt.Printf("       rate-limit ICMP generation on their control planes, or intermediate firewalls drop high UDP.\n")
+		}
+	}
+
+	// 2. Multipath / Load Balancing Guidance
+	npaths := tr.NumPaths
+	if npaths <= 1 {
+		fmt.Println("   • Multipath Discovery (-npaths 1):")
+		fmt.Println("     - Probed with 1 flow. To uncover Equal-Cost Multi-Path (ECMP) routing and divergent paths,")
+		fmt.Println("       run with '-npaths 4' or '-npaths 8'.")
+	} else {
+		srcPort := tr.SrcPort
+		if srcPort == 0 {
+			srcPort = 33434
+		}
+		fmt.Printf("   • Multipath ECMP Discovery (-npaths %d, source ports %d-%d):\n", npaths, srcPort, srcPort+npaths-1)
+		fmt.Println("     - Flow Hashing: Dublin Traceroute modifies source ports to traverse distinct ECMP hash buckets.")
+		if tr.HasMultiplePaths() {
+			fmt.Printf("     - Divergent Paths: Detected %d distinct routes. Compare per-path latencies to identify asymmetric routing.\n", len(tr.GetPaths()))
+		} else {
+			fmt.Println("     - Single Path Active: All flows traversed the same routers; upstream network uses single-path or per-dest hashing.")
+		}
+	}
+
+	// 3. Multi-Probe / MTR Guidance
+	if tr.ProbeCount > 1 {
+		fmt.Printf("   • Multi-Probe / MTR Mode (-count %d):\n", tr.ProbeCount)
+		fmt.Println("     - Rate-Limiting vs Real Loss: Loss at an isolated hop followed by 0% loss downstream indicates")
+		fmt.Println("       router ICMP rate-limiting (benign). Loss that persists through to the destination indicates genuine congestion.")
+		fmt.Println("     - Jitter (StdDev): High standard deviation reveals queue oscillation, bufferbloat, or route flapping.")
+	} else {
+		fmt.Println("   • Single Probe Mode (-count 1):")
+		fmt.Println("     - Run with '-count 5' or '-count 10' for MTR-style statistics (loss %, min/avg/max latency, jitter).")
+	}
+
+	// 4. Timeout Guidance
+	if tr.Timeout > 0 {
+		if tr.Timeout < 500*time.Millisecond {
+			fmt.Printf("   • Aggressive Timeout (-timeout %v):\n", tr.Timeout)
+			fmt.Printf("     - Fast scanning. Note that transoceanic hops or congested WAN links (>%v RTT) may falsely timeout (*).\n", tr.Timeout)
+		} else if tr.Timeout >= 2*time.Second {
+			fmt.Printf("   • Conservative Timeout (-timeout %v):\n", tr.Timeout)
+			fmt.Println("     - Thorough for high-latency or satellite links, but increases total wait time on unresponsive hops.")
+		}
+	}
+
+	// 5. Target Reachability and Max TTL Guidance
+	if tr.MaxTTL > 0 && !tr.IsTargetReached() {
+		fmt.Printf("   • Destination Not Reached (-max-ttl %d):\n", tr.MaxTTL)
+		fmt.Printf("     - Target %s was not reached within %d hops. Internet paths typically span 12-25 hops.\n", tr.Target, tr.MaxTTL)
+		fmt.Println("       Try increasing search depth with '-max-ttl 30'.")
+	}
+
+	fmt.Println()
 }
 
 // PrintGeographicInsights provides geographic context based on hostnames

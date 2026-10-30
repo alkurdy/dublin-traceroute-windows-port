@@ -101,6 +101,8 @@ go tool cover -html=coverage.out
 | `pkg/results` | `TestAnalyzeNetwork_RealRecordedTrace` | Replays `test_trace.json` (real 1,300-line production trace) to ensure parser resilience. |
 | `pkg/results` | `TestTracerouteResult_PrintSummary_NoPanic` | Validates console table rendering and MTR output formatters execute without panicking. |
 | `pkg/results` | `TestTracerouteResult_PrintSummary_ShowAnalysisOption` | Confirms `PrintSummary` respects `-analyze=false` suppression. |
+| `pkg/results` | `TestPrintParameterInsights_Variants` | Validates parameter-specific diagnostic guidance across UDP, TCP, port 53, multipath, and MTR modes. |
+| `pkg/results` | `TestIsTargetReached` | Asserts target reachability detection across intermediate and destination hops. |
 
 ---
 

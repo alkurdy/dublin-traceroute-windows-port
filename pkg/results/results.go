@@ -17,12 +17,20 @@ import (
 
 // TracerouteResult represents the complete result of a Dublin Traceroute
 type TracerouteResult struct {
-	Target    string               `json:"target"`
-	SrcIP     string               `json:"src_ip"`
-	StartTime time.Time            `json:"start_time"`
-	EndTime   time.Time            `json:"end_time"`
-	Duration  time.Duration        `json:"duration"`
-	Hops      map[uint8]*HopResult `json:"hops"`
+	Target     string               `json:"target"`
+	SrcIP      string               `json:"src_ip"`
+	StartTime  time.Time            `json:"start_time"`
+	EndTime    time.Time            `json:"end_time"`
+	Duration   time.Duration        `json:"duration"`
+	Hops       map[uint8]*HopResult `json:"hops"`
+	Protocol   string               `json:"protocol,omitempty"`
+	SrcPort    uint16               `json:"src_port,omitempty"`
+	DstPort    uint16               `json:"dst_port,omitempty"`
+	NumPaths   uint16               `json:"num_paths,omitempty"`
+	MinTTL     uint8                `json:"min_ttl,omitempty"`
+	MaxTTL     uint8                `json:"max_ttl,omitempty"`
+	ProbeCount int                  `json:"probe_count,omitempty"`
+	Timeout    time.Duration        `json:"timeout,omitempty"`
 }
 
 // HopResult represents all flows at a specific TTL level
@@ -427,8 +435,21 @@ func (tr *TracerouteResult) CalculateHopStatistics() map[uint8]*HopStatistics {
 	return stats
 }
 
-// PrintMTRStyle displays results in MTR-style table format with statistics
-func (tr *TracerouteResult) PrintMTRStyle() {
+// IsTargetReached checks if any flow received a valid response from the target host
+func (tr *TracerouteResult) IsTargetReached() bool {
+	for _, hopResult := range tr.Hops {
+		for _, flowResult := range hopResult.Flows {
+			if flowResult.ResponseIP == tr.Target && flowResult.Error == "" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// PrintMTRStyle displays results in MTR-style table format with statistics.
+// The optional showAnalysis parameter controls whether parameter guidance is displayed.
+func (tr *TracerouteResult) PrintMTRStyle(showAnalysis ...bool) {
 	stats := tr.CalculateHopStatistics()
 
 	// Get sorted TTL list
@@ -561,4 +582,13 @@ func (tr *TracerouteResult) PrintMTRStyle() {
 	}
 
 	fmt.Println()
+
+	// Print parameter guidance if analysis is not explicitly disabled
+	enableAnalysis := true
+	if len(showAnalysis) > 0 {
+		enableAnalysis = showAnalysis[0]
+	}
+	if enableAnalysis {
+		tr.PrintParameterInsights()
+	}
 }
