@@ -102,7 +102,7 @@ dublin-traceroute -target 10.172.23.218 -count 3 -max-ttl 5 -npaths 2 -timeout 1
 ```
 === MTR-Style Statistics ===
 TTL Host                                      Loss%    Snt      Min      Avg      Max   StdDev
-1   router.local (192.168.1.1)    33.3%     12   36.4ms  343.8ms  680.2ms  228.1ms
+1   router.local (192.168.1.1)       33.3%     12   36.4ms  343.8ms  680.2ms  228.1ms
 2   router1.example.net. (192.0.2.1)  16.7%     12    2.0ms   93.1ms  200.2ms   86.2ms
 3   router2.example.net. (198.51.100.1)   8.3%     12    3.5ms   18.2ms   25.8ms    7.1ms
 ```

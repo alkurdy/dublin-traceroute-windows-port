@@ -40,7 +40,7 @@ Duration: 45.2s
 
 TTL Host                                      Loss%    Snt      Min      Avg      Max   StdDev
 --------------------------------------------------------------------------------------------------
-1   router.local (192.168.1.1)            0.0%     12    1.2ms    1.5ms    2.1ms    0.3ms
+1   router.local (192.168.1.1)                 0.0%     12    1.2ms    1.5ms    2.1ms    0.3ms
 2   border-router.isp.com (65.175.128.1)       8.3%     12    8.5ms   12.3ms   18.7ms    3.2ms
 3   core-router.backbone.net (209.196.1.1)    16.7%     12   15.2ms   24.8ms   45.3ms   12.4ms
 4   google-peer.backbone.net (108.170.1.1)    33.3%     12   18.9ms   28.5ms   52.1ms   18.9ms
