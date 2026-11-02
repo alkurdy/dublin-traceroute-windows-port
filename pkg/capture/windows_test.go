@@ -75,7 +75,7 @@ func TestMatchICMPResponse_TimeExceededMatching(t *testing.T) {
 func TestMatchICMPResponse_DestinationUnreachableUnrelatedTarget(t *testing.T) {
 	localIP := net.ParseIP("192.168.12.210")
 	targetIP := net.ParseIP("8.8.8.8")
-	unrelatedHost := net.ParseIP("198.51.100.4") // example.com
+	unrelatedHost := net.ParseIP("198.51.100.4") // unrelated external host
 
 	// External host sends DestinationUnreachable about unrelated traffic, NOT to 8.8.8.8
 	pkt := craftMockICMP(unrelatedHost, localIP, layers.CreateICMPv4TypeCode(layers.ICMPv4TypeDestinationUnreachable, 3), localIP, unrelatedHost)

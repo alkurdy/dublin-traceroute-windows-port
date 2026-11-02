@@ -237,7 +237,7 @@ TTL 4:  Loss 25.0%, Min 5.5ms, Avg 730.9ms, Max 1689.1ms, StdDev 709.1ms
 ## Testing Performed
 
 ### Test Environments
-1. **Corporate VDI Environment** (Community Open Source)
+1. **Corporate VDI Environment**
    - High ICMP filtering detected (66-100% loss)
    - TCP mode performed better (lower loss)
    - MTR mode correctly identified ICMP rate limiting
